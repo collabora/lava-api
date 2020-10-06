@@ -9,6 +9,7 @@ use device::Device;
 use paginator::Paginator;
 use worker::Worker;
 
+#[derive(Debug, Clone)]
 pub struct Lava {
     client: Client,
     base: Url,
