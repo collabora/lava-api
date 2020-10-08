@@ -36,5 +36,7 @@ impl TryFrom<&str> for Health {
 pub struct Device {
     pub hostname: String,
     pub worker_host: String,
+    pub device_type: String,
+    pub description: Option<String>,
     pub health: Health,
 }
