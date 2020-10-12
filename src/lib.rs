@@ -3,8 +3,9 @@ mod paginator;
 pub mod tag;
 pub mod worker;
 
-use reqwest::Client;
+use reqwest::{header, Client};
 use std::collections::HashMap;
+use std::convert::TryInto;
 use tokio::stream::StreamExt;
 use tokio::sync::RwLock;
 use url::Url;
@@ -22,16 +23,22 @@ pub struct Lava {
 }
 
 impl Lava {
-    pub fn new(url: &str) -> Result<Lava, url::ParseError> {
+    pub fn new(url: &str, token: Option<String>) -> Result<Lava, url::ParseError> {
         let host: Url = url.parse()?;
         let base = host.join("api/v0.2/")?;
         let tags = RwLock::new(HashMap::new());
+        let mut headers = header::HeaderMap::new();
 
-        Ok(Lava {
-            client: Client::new(),
-            base,
-            tags,
-        })
+        if let Some(t) = token {
+            headers.insert(
+                reqwest::header::AUTHORIZATION,
+                format!("Token {}", t).try_into().unwrap(),
+            );
+        }
+
+        let client = Client::builder().default_headers(headers).build().unwrap();
+
+        Ok(Lava { client, base, tags })
     }
 
     pub async fn refresh_tags(&self) -> Result<(), PaginationError> {
