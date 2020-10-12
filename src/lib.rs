@@ -61,13 +61,13 @@ impl Lava {
         let _ = self.refresh_tags().await;
 
         let tags = self.tags.read().await;
-        return tags.get(&tag).cloned();
+        tags.get(&tag).cloned()
     }
 
     pub async fn tags(&self) -> Result<Vec<Tag>, PaginationError> {
         self.refresh_tags().await?;
         let tags = self.tags.read().await;
-        Ok(tags.values().map(|t| t.clone()).collect())
+        Ok(tags.values().cloned().collect())
     }
 
     pub fn devices(&self) -> Devices {
