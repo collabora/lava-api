@@ -38,10 +38,11 @@ async fn main() -> Result<(), Error> {
     println!("Devices:");
     while let Some(d) = devices.try_next().await? {
         println!(
-            " {}  {} on {}",
+            " {}  {} on {} tags {:?}",
             device_health_to_emoji(d.health),
             d.hostname,
-            d.worker_host
+            d.worker_host,
+            d.tags,
         );
     }
 
