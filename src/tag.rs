@@ -4,5 +4,5 @@ use serde::Deserialize;
 pub struct Tag {
     pub id: u32,
     pub name: String,
-    pub description: String,
+    pub description: Option<String>,
 }
