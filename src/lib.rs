@@ -14,6 +14,17 @@ use device::Devices;
 use paginator::{PaginationError, Paginator};
 use tag::Tag;
 use worker::Worker;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum LavaError {
+    #[error("Could not parse url")]
+    ParseUrlError(#[from] url::ParseError),
+    #[error("Invalid token format")]
+    InvalidToken(#[from] header::InvalidHeaderValue),
+    #[error("Failed to build reqwest client")]
+    ReqwestError(#[from] reqwest::Error)
+}
 
 #[derive(Debug)]
 pub struct Lava {
@@ -23,7 +34,7 @@ pub struct Lava {
 }
 
 impl Lava {
-    pub fn new(url: &str, token: Option<String>) -> Result<Lava, url::ParseError> {
+    pub fn new(url: &str, token: Option<String>) -> Result<Lava, LavaError> {
         let host: Url = url.parse()?;
         let base = host.join("api/v0.2/")?;
         let tags = RwLock::new(HashMap::new());
@@ -32,11 +43,11 @@ impl Lava {
         if let Some(t) = token {
             headers.insert(
                 reqwest::header::AUTHORIZATION,
-                format!("Token {}", t).try_into().unwrap(),
+                format!("Token {}", t).try_into()?
             );
         }
 
-        let client = Client::builder().default_headers(headers).build().unwrap();
+        let client = Client::builder().default_headers(headers).build()?;
 
         Ok(Lava { client, base, tags })
     }
