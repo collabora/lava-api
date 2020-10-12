@@ -1,14 +1,12 @@
 use futures::future::BoxFuture;
 use futures::stream::StreamExt;
 use futures::FutureExt;
-use reqwest::Client;
 use serde::Deserialize;
 use std::convert::TryFrom;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use thiserror::Error;
 use tokio::stream::{self, Stream};
-use url::Url;
 
 use crate::paginator::{PaginationError, Paginator};
 use crate::tag::Tag;
@@ -76,8 +74,8 @@ pub struct Devices<'a> {
 }
 
 impl<'a> Devices<'a> {
-    pub fn new(lava: &'a Lava, client: Client, base: &Url) -> Self {
-        let paginator = Paginator::new(client, base, "devices");
+    pub fn new(lava: &'a Lava) -> Self {
+        let paginator = Paginator::new(lava.client.clone(), &lava.base, "devices");
         Self {
             lava,
             paginator,

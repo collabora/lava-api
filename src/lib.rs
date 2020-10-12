@@ -64,7 +64,7 @@ impl Lava {
     }
 
     pub fn devices(&self) -> Devices {
-        Devices::new(self, self.client.clone(), &self.base)
+        Devices::new(self)
     }
 
     pub fn workers(&self) -> Paginator<Worker> {
