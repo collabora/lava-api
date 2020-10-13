@@ -1,5 +1,6 @@
 use futures::future::BoxFuture;
 use futures::FutureExt;
+use log::debug;
 use reqwest::Client;
 use serde::{de::DeserializeOwned, Deserialize};
 use std::collections::VecDeque;
@@ -14,6 +15,12 @@ use url::Url;
 pub enum PaginationError {
     #[error("http request failed: {0}")]
     ReqWest(#[from] reqwest::Error),
+    #[error("HTTP redirect without location")]
+    RedirectMissing,
+    #[error("HTTP redirect not valid utf-8")]
+    RedirectInvalidUTF8,
+    #[error("Too many redirects")]
+    TooManyRedirects,
     #[error("Failed to parse next uri: {0}")]
     ParseNextError(#[from] url::ParseError),
 }
@@ -56,10 +63,38 @@ where
     where
         T: DeserializeOwned,
     {
-        client
-            .get(uri)
-            .send()
-            .await?
+        let mut redirects: u8 = 0;
+        let mut u = uri.clone();
+        let response = loop {
+            let response = client.get(u.clone()).send().await?;
+
+            if !response.status().is_redirection() {
+                break response;
+            }
+
+            if redirects > 9 {
+                return Err(PaginationError::TooManyRedirects);
+            }
+
+            redirects += 1;
+            if let Some(location) = response.headers().get("location") {
+                let redirect = std::str::from_utf8(location.as_bytes())
+                    .or(Err(PaginationError::RedirectInvalidUTF8))?;
+
+                debug!("Redirecting from {:?} to {:?}", u, location);
+                u = u.join(redirect)?;
+                // Prevent https to http downgrade as we might have a token in
+                // the request
+                if uri.scheme() == "https" && u.scheme() == "http" {
+                    u.set_scheme("https").unwrap();
+                }
+            } else {
+                return Err(PaginationError::RedirectMissing);
+            }
+        };
+
+        response
+            .error_for_status()?
             .json()
             .await
             .map_err(|e| e.into())

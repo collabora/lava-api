@@ -3,7 +3,8 @@ mod paginator;
 pub mod tag;
 pub mod worker;
 
-use reqwest::{header, Client};
+use log::debug;
+use reqwest::{header, redirect::Policy, Client};
 use std::collections::HashMap;
 use std::convert::TryInto;
 use tokio::stream::StreamExt;
@@ -13,8 +14,8 @@ use url::Url;
 use device::Devices;
 use paginator::{PaginationError, Paginator};
 use tag::Tag;
-use worker::Worker;
 use thiserror::Error;
+use worker::Worker;
 
 #[derive(Error, Debug)]
 pub enum LavaError {
@@ -23,7 +24,7 @@ pub enum LavaError {
     #[error("Invalid token format")]
     InvalidToken(#[from] header::InvalidHeaderValue),
     #[error("Failed to build reqwest client")]
-    ReqwestError(#[from] reqwest::Error)
+    ReqwestError(#[from] reqwest::Error),
 }
 
 #[derive(Debug)]
@@ -43,16 +44,22 @@ impl Lava {
         if let Some(t) = token {
             headers.insert(
                 reqwest::header::AUTHORIZATION,
-                format!("Token {}", t).try_into()?
+                format!("Token {}", t).try_into()?,
             );
         }
 
-        let client = Client::builder().default_headers(headers).build()?;
+        // Force redirect policy none as that will drop sensitive headers; in
+        // particular tokens
+        let client = Client::builder()
+            .redirect(Policy::none())
+            .default_headers(headers)
+            .build()?;
 
         Ok(Lava { client, base, tags })
     }
 
     pub async fn refresh_tags(&self) -> Result<(), PaginationError> {
+        debug!("Refreshing tags cache");
         let mut tags = self.tags.write().await;
         let mut new_tags: Paginator<Tag> = Paginator::new(self.client.clone(), &self.base, "tags/");
         while let Some(t) = new_tags.try_next().await? {
@@ -63,6 +70,7 @@ impl Lava {
     }
 
     pub async fn tag(&self, tag: u32) -> Option<Tag> {
+        debug!("Checking for tag id: {}", tag);
         {
             let tags = self.tags.read().await;
             if let Some(t) = tags.get(&tag) {
@@ -86,6 +94,6 @@ impl Lava {
     }
 
     pub fn workers(&self) -> Paginator<Worker> {
-        Paginator::new(self.client.clone(), &self.base, "workers")
+        Paginator::new(self.client.clone(), &self.base, "workers/")
     }
 }

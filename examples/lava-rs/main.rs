@@ -32,14 +32,21 @@ fn worker_to_emoji(w: &Worker) -> &'static str {
 
 #[derive(StructOpt)]
 struct Opt {
+    #[structopt(short, long, default_value = "https://lava.collabora.com")]
+    url: String,
     #[structopt(short, long)]
     token: Option<String>,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    let env = env_logger::Env::default()
+        .filter_or("LAVA_LOG", "lava_monitor=info")
+        .write_style("LAVA_WRITE_STYLE");
+    env_logger::init_from_env(env);
+
     let opts = Opt::from_args();
-    let l = Lava::new("https://lava.collabora.co.uk", opts.token).unwrap();
+    let l = Lava::new(&opts.url, opts.token).unwrap();
 
     let mut devices = l.devices();
     println!("Devices:");
