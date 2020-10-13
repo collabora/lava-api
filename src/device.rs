@@ -75,7 +75,11 @@ pub struct Devices<'a> {
 
 impl<'a> Devices<'a> {
     pub fn new(lava: &'a Lava) -> Self {
-        let paginator = Paginator::new(lava.client.clone(), &lava.base, "devices");
+        let paginator = Paginator::new(
+            lava.client.clone(),
+            &lava.base,
+            "devices/?ordering=hostname",
+        );
         Self {
             lava,
             paginator,
