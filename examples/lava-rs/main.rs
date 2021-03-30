@@ -1,5 +1,6 @@
 use anyhow::Error;
 use lava_api::device;
+use lava_api::job;
 use lava_api::worker::{self, Worker};
 use lava_api::Lava;
 use structopt::StructOpt;
@@ -69,6 +70,23 @@ async fn main() -> Result<(), Error> {
     while let Some(w) = workers.try_next().await? {
         println!(" {}  {}", worker_to_emoji(&w), w.hostname);
     }
+
+    println!("\nQueued Jobs:");
+    let mut jobs = l.jobs().state(job::State::Submitted).query();
+    let mut num = 10;
+    while let Some(w) = jobs.try_next().await? {
+        println!(" 💤️  [{}]  {}", w.id, w.description);
+        num = num - 1;
+        if num == 0 {
+            match jobs.reported_items() {
+                Some(n) => println!("\n…and {} more jobs", n-10),
+                None => println!("\n…and an unknown amount of jobs")
+            };
+            break;
+        }
+    }
+
+
 
     Ok(())
 }

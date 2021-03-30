@@ -2,6 +2,7 @@ pub mod device;
 mod paginator;
 pub mod tag;
 pub mod worker;
+pub mod job;
 
 use futures::stream::TryStreamExt;
 use log::debug;
@@ -12,6 +13,7 @@ use tokio::sync::RwLock;
 use url::Url;
 
 use device::Devices;
+use job::JobsBuilder;
 use paginator::{PaginationError, Paginator};
 use tag::Tag;
 use thiserror::Error;
@@ -91,6 +93,10 @@ impl Lava {
 
     pub fn devices(&self) -> Devices {
         Devices::new(self)
+    }
+
+    pub fn jobs(&self) -> JobsBuilder {
+        JobsBuilder::new(self)
     }
 
     pub fn workers(&self) -> Paginator<Worker> {

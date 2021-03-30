@@ -27,7 +27,7 @@ pub enum PaginationError {
 
 #[derive(Deserialize, Debug)]
 struct PaginatedReply<T> {
-    count: i32,
+    count: u32,
     next: Option<String>,
     results: VecDeque<T>,
 }
@@ -41,6 +41,7 @@ enum State<T> {
 pub struct Paginator<T> {
     client: Client,
     next: State<T>,
+    count: Option<u32>,
 }
 
 impl<T> Paginator<T>
@@ -56,7 +57,7 @@ where
             .boxed(),
         );
 
-        Paginator { client, next }
+        Paginator { client, next, count: None }
     }
 
     async fn get(client: Client, uri: Url) -> Result<PaginatedReply<T>, PaginationError>
@@ -102,6 +103,7 @@ where
 
     fn next_data(&mut self) -> Result<Option<T>, PaginationError> {
         if let State::Data(d) = &mut self.next {
+            self.count = Some(d.count);
             if let Some(data) = d.results.pop_front() {
                 return Ok(Some(data));
             }
@@ -118,6 +120,10 @@ where
             }
         }
         Ok(None)
+    }
+
+    pub fn reported_items(&self) -> Option<u32> {
+        self.count
     }
 }
 
