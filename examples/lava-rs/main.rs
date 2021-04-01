@@ -3,7 +3,7 @@ use lava_api::device;
 use lava_api::worker::{self, Worker};
 use lava_api::Lava;
 use structopt::StructOpt;
-use tokio::stream::StreamExt;
+use futures::stream::TryStreamExt;
 
 fn device_health_to_emoji(health: device::Health) -> &'static str {
     use device::Health::*;
