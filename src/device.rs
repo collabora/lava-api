@@ -1,12 +1,11 @@
 use futures::future::BoxFuture;
-use futures::stream::StreamExt;
+use futures::{stream, stream::Stream, stream::StreamExt};
 use futures::FutureExt;
 use serde::Deserialize;
 use std::convert::TryFrom;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use thiserror::Error;
-use tokio::stream::{self, Stream};
 
 use crate::paginator::{PaginationError, Paginator};
 use crate::tag::Tag;

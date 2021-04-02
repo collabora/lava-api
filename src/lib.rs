@@ -3,11 +3,11 @@ mod paginator;
 pub mod tag;
 pub mod worker;
 
+use futures::stream::TryStreamExt;
 use log::debug;
 use reqwest::{header, redirect::Policy, Client};
 use std::collections::HashMap;
 use std::convert::TryInto;
-use tokio::stream::StreamExt;
 use tokio::sync::RwLock;
 use url::Url;
 

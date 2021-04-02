@@ -1,5 +1,6 @@
 use futures::future::BoxFuture;
 use futures::FutureExt;
+use futures::stream::Stream;
 use log::debug;
 use reqwest::Client;
 use serde::{de::DeserializeOwned, Deserialize};
@@ -7,7 +8,6 @@ use std::collections::VecDeque;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use thiserror::Error;
-use tokio::stream::Stream;
 use url::Url;
 
 #[derive(Debug, Error)]
