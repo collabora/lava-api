@@ -37,6 +37,8 @@ struct Opt {
     url: String,
     #[structopt(short, long)]
     token: Option<String>,
+    #[structopt(short, long, default_value = "10")]
+    limit: u32,
 }
 
 #[tokio::main]
@@ -72,8 +74,8 @@ async fn main() -> Result<(), Error> {
     }
 
     println!("\nQueued Jobs:");
-    let mut jobs = l.jobs().state(job::State::Submitted).query();
-    let mut num = 10;
+    let mut jobs = l.jobs().limit(opts.limit).state(job::State::Submitted).query();
+    let mut num = opts.limit;
     while let Some(w) = jobs.try_next().await? {
         println!(" 💤️  [{}]  {}", w.id, w.description);
         num = num - 1;

@@ -1,13 +1,13 @@
 use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
-use futures::stream::{self, StreamExt, Stream};
+use futures::stream::{self, Stream, StreamExt};
 use futures::FutureExt;
 use serde::Deserialize;
 use std::convert::TryFrom;
+use std::fmt;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use thiserror::Error;
-use std::fmt;
 
 use crate::paginator::{PaginationError, Paginator};
 use crate::tag::Tag;
@@ -128,7 +128,6 @@ pub struct Job {
     pub failure_comment: Option<String>,
 }
 
-
 enum PagingState<'a> {
     Paging,
     Transforming(BoxFuture<'a, Job>),
@@ -142,13 +141,14 @@ pub struct Jobs<'a> {
 
 impl<'a> Jobs<'a> {
     pub fn reported_items(&self) -> Option<u32> {
-        self.paginator.reported_items ()
+        self.paginator.reported_items()
     }
 }
 
 pub struct JobsBuilder<'a> {
     lava: &'a Lava,
-    state: Option<State>
+    state: Option<State>,
+    limit: Option<u32>,
 }
 
 impl<'a> JobsBuilder<'a> {
@@ -156,6 +156,7 @@ impl<'a> JobsBuilder<'a> {
         Self {
             lava,
             state: None,
+            limit: None,
         }
     }
 
@@ -164,20 +165,20 @@ impl<'a> JobsBuilder<'a> {
         self
     }
 
+    pub fn limit(mut self, limit: u32) -> Self {
+        self.limit = Some(limit);
+        self
+    }
+
     pub fn query(self) -> Jobs<'a> {
         let mut query = String::from("jobs/?ordering=id");
-        match self.state {
-            Some(state) => {
-                query.push_str(";state=");
-                query.push_str(&state.to_string());
-            },
-            _ => {}
+        if let Some(state) = self.state {
+            query.push_str(format!(";state={}", state).as_str())
         };
-        let paginator = Paginator::new(
-            self.lava.client.clone(),
-            &self.lava.base,
-            &query,
-        );
+        if let Some(limit) = self.limit {
+            query.push_str(format!(";limit={}", limit).as_str())
+        };
+        let paginator = Paginator::new(self.lava.client.clone(), &self.lava.base, &query);
         Jobs {
             lava: self.lava,
             paginator,
