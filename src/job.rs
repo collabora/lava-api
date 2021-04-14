@@ -93,6 +93,24 @@ impl TryFrom<&str> for Health {
     }
 }
 
+pub enum Ordering {
+    Id,
+    StartTime,
+    EndTime,
+    SubmitTime,
+}
+
+impl fmt::Display for Ordering {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Ordering::Id => write!(f, "id"),
+            Ordering::StartTime => write!(f, "start_time"),
+            Ordering::EndTime => write!(f, "end_time"),
+            Ordering::SubmitTime => write!(f, "submit_time"),
+        }
+    }
+}
+
 #[derive(Clone, Deserialize, Debug)]
 struct LavaJob {
     id: i64,
@@ -161,6 +179,8 @@ pub struct JobsBuilder<'a> {
     state: Option<State>,
     health: Option<Health>,
     limit: Option<u32>,
+    ordering: Ordering,
+    ascending: bool,
 }
 
 impl<'a> JobsBuilder<'a> {
@@ -170,6 +190,8 @@ impl<'a> JobsBuilder<'a> {
             state: None,
             health: None,
             limit: None,
+            ordering: Ordering::Id,
+            ascending: true,
         }
     }
 
@@ -188,8 +210,14 @@ impl<'a> JobsBuilder<'a> {
         self
     }
 
+    pub fn ordering(mut self, ordering: Ordering, ascending: bool) -> Self {
+        self.ordering = ordering;
+        self.ascending = ascending;
+        self
+    }
+
     pub fn query(self) -> Jobs<'a> {
-        let mut query = String::from("jobs/?ordering=id");
+        let mut query = format!("jobs/?ordering={}{}", match self.ascending { true => "", false => "-"}, self.ordering);
         if let Some(state) = self.state {
             query.push_str(format!(";state={}", state).as_str())
         };
