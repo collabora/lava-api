@@ -65,6 +65,17 @@ pub enum Health {
     Canceled,
 }
 
+impl fmt::Display for Health {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Health::Unknown => write!(f, "Unknown"),
+            Health::Complete => write!(f, "Complete"),
+            Health::Incomplete => write!(f, "Incomplete"),
+            Health::Canceled => write!(f, "Canceled"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 #[error("Failed to convert into Health")]
 pub struct TryFromHealthError {}
@@ -148,6 +159,7 @@ impl<'a> Jobs<'a> {
 pub struct JobsBuilder<'a> {
     lava: &'a Lava,
     state: Option<State>,
+    health: Option<Health>,
     limit: Option<u32>,
 }
 
@@ -156,6 +168,7 @@ impl<'a> JobsBuilder<'a> {
         Self {
             lava,
             state: None,
+            health: None,
             limit: None,
         }
     }
@@ -170,6 +183,11 @@ impl<'a> JobsBuilder<'a> {
         self
     }
 
+    pub fn health(mut self, health: Health) -> Self {
+        self.health = Some(health);
+        self
+    }
+
     pub fn query(self) -> Jobs<'a> {
         let mut query = String::from("jobs/?ordering=id");
         if let Some(state) = self.state {
@@ -177,6 +195,9 @@ impl<'a> JobsBuilder<'a> {
         };
         if let Some(limit) = self.limit {
             query.push_str(format!(";limit={}", limit).as_str())
+        };
+        if let Some(health) = self.health {
+            query.push_str(format!(";health={}", health).as_str())
         };
         let paginator = Paginator::new(self.lava.client.clone(), &self.lava.base, &query);
         Jobs {
