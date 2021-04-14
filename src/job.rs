@@ -115,7 +115,7 @@ impl fmt::Display for Ordering {
 struct LavaJob {
     id: i64,
     submitter: String,
-    viewing_groups: Vec<String>,
+    viewing_groups: Vec<u64>,
     description: String,
     health_check: bool,
     requested_device_type: String,
@@ -138,7 +138,7 @@ struct LavaJob {
 pub struct Job {
     pub id: i64,
     pub submitter: String,
-    pub viewing_groups: Vec<String>,
+    pub viewing_groups: Vec<u64>,
     pub description: String,
     pub health_check: bool,
     pub requested_device_type: String,
