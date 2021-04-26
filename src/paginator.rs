@@ -40,6 +40,7 @@ enum State<T> {
 
 pub struct Paginator<T> {
     client: Client,
+    current: Url,
     next: State<T>,
     count: Option<u32>,
 }
@@ -49,15 +50,16 @@ where
     T: DeserializeOwned + 'static,
 {
     pub fn new(client: Client, base: &Url, function: &str) -> Self {
+        let url = base.join(function).expect("Failed to append to base url");
         let next = State::Next(
             Self::get(
                 client.clone(),
-                base.join(function).expect("Failed to append to base url"),
+                url.clone(),
             )
             .boxed(),
         );
 
-        Paginator { client, next, count: None }
+        Paginator { client, current: url, next, count: None }
     }
 
     async fn get(client: Client, uri: Url) -> Result<PaginatedReply<T>, PaginationError>
@@ -109,9 +111,12 @@ where
             }
 
             if let Some(n) = &d.next {
-                let u = n.parse();
+                let u : Result<Url, _> = n.parse();
                 match u {
-                    Ok(u) => self.next = State::Next(Self::get(self.client.clone(), u).boxed()),
+                    Ok(u) => {
+                        self.next = State::Next(Self::get(self.client.clone(), u.clone()).boxed());
+                        self.current = u;
+                    },
                     Err(e) => {
                         self.next = State::Failed;
                         return Err(e.into());
@@ -144,7 +149,10 @@ where
                 Poll::Ready(r) => {
                     match r {
                         Ok(r) => me.next = State::Data(r),
-                        Err(e) => return Poll::Ready(Some(Err(e))),
+                        Err(e) => {
+                            me.next = State::Next(Self::get(me.client.clone(), me.current.clone()).boxed());
+                            return Poll::Ready(Some(Err(e)))
+                        },
                     }
                     if let Some(data) = me.next_data()? {
                         Poll::Ready(Some(Ok(data)))
