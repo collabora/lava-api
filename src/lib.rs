@@ -63,7 +63,8 @@ impl Lava {
     pub async fn refresh_tags(&self) -> Result<(), PaginationError> {
         debug!("Refreshing tags cache");
         let mut tags = self.tags.write().await;
-        let mut new_tags: Paginator<Tag> = Paginator::new(self.client.clone(), &self.base, "tags/");
+        let url = self.base.join("tags/")?;
+        let mut new_tags: Paginator<Tag> = Paginator::new(self.client.clone(), url);
         while let Some(t) = new_tags.try_next().await? {
             tags.insert(t.id, t);
         }
@@ -100,6 +101,7 @@ impl Lava {
     }
 
     pub fn workers(&self) -> Paginator<Worker> {
-        Paginator::new(self.client.clone(), &self.base, "workers/")
+        let url = self.base.join("workers/").expect("Failed to append to base url");
+        Paginator::new(self.client.clone(), url)
     }
 }

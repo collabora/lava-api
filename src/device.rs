@@ -74,10 +74,10 @@ pub struct Devices<'a> {
 
 impl<'a> Devices<'a> {
     pub fn new(lava: &'a Lava) -> Self {
+        let url = lava.base.join("devices/?ordering=hostname").expect("Failed to append to base url");
         let paginator = Paginator::new(
             lava.client.clone(),
-            &lava.base,
-            "devices/?ordering=hostname",
+            url,
         );
         Self {
             lava,

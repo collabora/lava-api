@@ -49,8 +49,7 @@ impl<T> Paginator<T>
 where
     T: DeserializeOwned + 'static,
 {
-    pub fn new(client: Client, base: &Url, function: &str) -> Self {
-        let url = base.join(function).expect("Failed to append to base url");
+    pub fn new(client: Client, url: Url) -> Self {
         let next = State::Next(
             Self::get(
                 client.clone(),

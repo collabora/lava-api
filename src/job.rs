@@ -217,17 +217,19 @@ impl<'a> JobsBuilder<'a> {
     }
 
     pub fn query(self) -> Jobs<'a> {
-        let mut query = format!("jobs/?ordering={}{}", match self.ascending { true => "", false => "-"}, self.ordering);
+        let mut url = self.lava.base.join("jobs/").expect("Failed to append to base url");
+        url.query_pairs_mut()
+            .append_pair("ordering", &format!("{}{}", match self.ascending { true => "", false => "-"}, self.ordering));
         if let Some(state) = self.state {
-            query.push_str(format!(";state={}", state).as_str())
+            url.query_pairs_mut().append_pair("state", &state.to_string());
         };
         if let Some(limit) = self.limit {
-            query.push_str(format!(";limit={}", limit).as_str())
+            url.query_pairs_mut().append_pair("limit", &limit.to_string());
         };
         if let Some(health) = self.health {
-            query.push_str(format!(";health={}", health).as_str())
+            url.query_pairs_mut().append_pair("health", &health.to_string());
         };
-        let paginator = Paginator::new(self.lava.client.clone(), &self.lava.base, &query);
+        let paginator = Paginator::new(self.lava.client.clone(), url);
         Jobs {
             lava: self.lava,
             paginator,
