@@ -153,11 +153,7 @@ where
                             return Poll::Ready(Some(Err(e)))
                         },
                     }
-                    if let Some(data) = me.next_data()? {
-                        Poll::Ready(Some(Ok(data)))
-                    } else {
-                        Poll::Pending
-                    }
+                    Poll::Ready(me.next_data().transpose())
                 }
                 _ => Poll::Pending,
             }
