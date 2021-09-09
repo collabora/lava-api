@@ -7,13 +7,15 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use strum::{EnumIter, IntoEnumIterator};
 use thiserror::Error;
 
 use crate::paginator::{PaginationError, Paginator};
+use crate::queryset::{QuerySet, QuerySetMember};
 use crate::tag::Tag;
 use crate::Lava;
 
-#[derive(Copy, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Copy, Deserialize, Clone, Debug, Hash, PartialEq, Eq, EnumIter)]
 #[serde(try_from = "&str")]
 pub enum State {
     Submitted,
@@ -56,7 +58,14 @@ impl TryFrom<&str> for State {
     }
 }
 
-#[derive(Copy, Deserialize, Clone, Debug, PartialEq)]
+impl QuerySetMember for State {
+    type Iter = StateIter;
+    fn all() -> Self::Iter {
+        Self::iter()
+    }
+}
+
+#[derive(Copy, Deserialize, Clone, Debug, PartialEq, Eq, Hash, EnumIter)]
 #[serde(try_from = "&str")]
 pub enum Health {
     Unknown,
@@ -90,6 +99,13 @@ impl TryFrom<&str> for Health {
             "Canceled" => Ok(Health::Canceled),
             _ => Err(TryFromHealthError {}),
         }
+    }
+}
+
+impl QuerySetMember for Health {
+    type Iter = HealthIter;
+    fn all() -> Self::Iter {
+        Self::iter()
     }
 }
 
@@ -176,10 +192,14 @@ impl<'a> Jobs<'a> {
 
 pub struct JobsBuilder<'a> {
     lava: &'a Lava,
-    state: Option<State>,
-    health: Option<Health>,
+    states: QuerySet<State>,
+    healths: QuerySet<Health>,
     limit: Option<u32>,
     ordering: Ordering,
+    id_after: Option<i64>,
+    started_after: Option<DateTime<Utc>>,
+    submitted_after: Option<DateTime<Utc>>,
+    ended_after: Option<DateTime<Utc>>,
     ascending: bool,
 }
 
@@ -187,16 +207,27 @@ impl<'a> JobsBuilder<'a> {
     pub fn new(lava: &'a Lava) -> Self {
         Self {
             lava,
-            state: None,
-            health: None,
+            states: QuerySet::new(String::from("state")),
+            healths: QuerySet::new(String::from("health")),
             limit: None,
             ordering: Ordering::Id,
+            id_after: None,
+            started_after: None,
+            submitted_after: None,
+            ended_after: None,
             ascending: true,
         }
     }
 
+    /// Return jobs in this state.
     pub fn state(mut self, state: State) -> Self {
-        self.state = Some(state);
+        self.states.include(state);
+        self
+    }
+
+    /// Exclude jobs in this state.
+    pub fn state_not(mut self, state: State) -> Self {
+        self.states.exclude(&state);
         self
     }
 
@@ -205,11 +236,45 @@ impl<'a> JobsBuilder<'a> {
         self
     }
 
+    /// Return jobs with this health.
     pub fn health(mut self, health: Health) -> Self {
-        self.health = Some(health);
+        self.healths.include(health);
         self
     }
 
+    /// Exclude jobs with this health.
+    pub fn health_not(mut self, health: Health) -> Self {
+        self.healths.exclude(&health);
+        self
+    }
+
+    /// Return only jobs whose id is strictly greater than `id`.
+    pub fn id_after(mut self, id: i64) -> Self {
+        self.id_after = Some(id);
+        self
+    }
+
+    /// Return only jobs whose start time is strictly after the given
+    /// instant.
+    pub fn started_after(mut self, when: chrono::DateTime<Utc>) -> Self {
+        self.started_after = Some(when);
+        self
+    }
+
+    /// Return only jobs whose submission time is strictly after the
+    /// given instant.
+    pub fn submitted_after(mut self, when: chrono::DateTime<Utc>) -> Self {
+        self.submitted_after = Some(when);
+        self
+    }
+
+    /// Return only jobs which ended strictly after the given instant.
+    pub fn ended_after(mut self, when: chrono::DateTime<Utc>) -> Self {
+        self.ended_after = Some(when);
+        self
+    }
+
+    /// Order returned jobs by the given key.
     pub fn ordering(mut self, ordering: Ordering, ascending: bool) -> Self {
         self.ordering = ordering;
         self.ascending = ascending;
@@ -220,15 +285,32 @@ impl<'a> JobsBuilder<'a> {
         let mut url = self.lava.base.join("jobs/").expect("Failed to append to base url");
         url.query_pairs_mut()
             .append_pair("ordering", &format!("{}{}", match self.ascending { true => "", false => "-"}, self.ordering));
-        if let Some(state) = self.state {
-            url.query_pairs_mut().append_pair("state", &state.to_string());
-        };
+        if let Some(pair) = self.states.query() {
+            url.query_pairs_mut().append_pair(&pair.0, &pair.1);
+        }
         if let Some(limit) = self.limit {
             url.query_pairs_mut().append_pair("limit", &limit.to_string());
         };
-        if let Some(health) = self.health {
-            url.query_pairs_mut().append_pair("health", &health.to_string());
+        if let Some(pair) = self.healths.query() {
+            url.query_pairs_mut().append_pair(&pair.0, &pair.1);
+        }
+        if let Some(id_after) = self.id_after {
+            url.query_pairs_mut()
+                .append_pair("id__gt", &id_after.to_string());
         };
+        if let Some(started_after) = self.started_after {
+            url.query_pairs_mut()
+                .append_pair("start_time__gt", &started_after.to_rfc3339());
+        };
+        if let Some(submitted_after) = self.submitted_after {
+            url.query_pairs_mut()
+                .append_pair("submit_time__gt", &submitted_after.to_rfc3339());
+        };
+        if let Some(ended_after) = self.ended_after {
+            url.query_pairs_mut()
+                .append_pair("end_time__gt", &ended_after.to_rfc3339());
+        };
+
         let paginator = Paginator::new(self.lava.client.clone(), url);
         Jobs {
             lava: self.lava,
