@@ -1,5 +1,6 @@
 pub mod device;
 mod paginator;
+mod queryset;
 pub mod tag;
 pub mod worker;
 pub mod job;

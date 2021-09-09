@@ -17,6 +17,7 @@ tokio = { version = "1.4", features = ["macros", "rt", "rt-multi-thread", "sync"
 url = "2"
 thiserror = "1.0"
 log = "0.4"
+strum = { version = "0.21", features = ["derive"] }
 
 [dev-dependencies]
 anyhow = "1"
