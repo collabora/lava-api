@@ -1,6 +1,6 @@
 use futures::future::BoxFuture;
-use futures::{stream, stream::Stream, stream::StreamExt};
 use futures::FutureExt;
+use futures::{stream, stream::Stream, stream::StreamExt};
 use serde::Deserialize;
 use std::convert::TryFrom;
 use std::pin::Pin;
@@ -74,11 +74,11 @@ pub struct Devices<'a> {
 
 impl<'a> Devices<'a> {
     pub fn new(lava: &'a Lava) -> Self {
-        let url = lava.base.join("devices/?ordering=hostname").expect("Failed to append to base url");
-        let paginator = Paginator::new(
-            lava.client.clone(),
-            url,
-        );
+        let url = lava
+            .base
+            .join("devices/?ordering=hostname")
+            .expect("Failed to append to base url");
+        let paginator = Paginator::new(lava.client.clone(), url);
         Self {
             lava,
             paginator,

@@ -249,14 +249,28 @@ impl<'a> JobsBuilder<'a> {
     }
 
     pub fn query(self) -> Jobs<'a> {
-        let mut url = self.lava.base.join("jobs/").expect("Failed to append to base url");
-        url.query_pairs_mut()
-            .append_pair("ordering", &format!("{}{}", match self.ascending { true => "", false => "-"}, self.ordering));
+        let mut url = self
+            .lava
+            .base
+            .join("jobs/")
+            .expect("Failed to append to base url");
+        url.query_pairs_mut().append_pair(
+            "ordering",
+            &format!(
+                "{}{}",
+                match self.ascending {
+                    true => "",
+                    false => "-",
+                },
+                self.ordering
+            ),
+        );
         if let Some(pair) = self.states.query() {
             url.query_pairs_mut().append_pair(&pair.0, &pair.1);
         }
         if let Some(limit) = self.limit {
-            url.query_pairs_mut().append_pair("limit", &limit.to_string());
+            url.query_pairs_mut()
+                .append_pair("limit", &limit.to_string());
         };
         if let Some(pair) = self.healths.query() {
             url.query_pairs_mut().append_pair(&pair.0, &pair.1);

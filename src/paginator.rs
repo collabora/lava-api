@@ -1,6 +1,6 @@
 use futures::future::BoxFuture;
-use futures::FutureExt;
 use futures::stream::Stream;
+use futures::FutureExt;
 use log::debug;
 use reqwest::Client;
 use serde::{de::DeserializeOwned, Deserialize};
@@ -50,15 +50,14 @@ where
     T: DeserializeOwned + 'static,
 {
     pub fn new(client: Client, url: Url) -> Self {
-        let next = State::Next(
-            Self::get(
-                client.clone(),
-                url.clone(),
-            )
-            .boxed(),
-        );
+        let next = State::Next(Self::get(client.clone(), url.clone()).boxed());
 
-        Paginator { client, current: url, next, count: None }
+        Paginator {
+            client,
+            current: url,
+            next,
+            count: None,
+        }
     }
 
     async fn get(client: Client, uri: Url) -> Result<PaginatedReply<T>, PaginationError>
@@ -110,12 +109,12 @@ where
             }
 
             if let Some(n) = &d.next {
-                let u : Result<Url, _> = n.parse();
+                let u: Result<Url, _> = n.parse();
                 match u {
                     Ok(u) => {
                         self.next = State::Next(Self::get(self.client.clone(), u.clone()).boxed());
                         self.current = u;
-                    },
+                    }
                     Err(e) => {
                         self.next = State::Failed;
                         return Err(e.into());
@@ -149,9 +148,11 @@ where
                     match r {
                         Ok(r) => me.next = State::Data(r),
                         Err(e) => {
-                            me.next = State::Next(Self::get(me.client.clone(), me.current.clone()).boxed());
-                            return Poll::Ready(Some(Err(e)))
-                        },
+                            me.next = State::Next(
+                                Self::get(me.client.clone(), me.current.clone()).boxed(),
+                            );
+                            return Poll::Ready(Some(Err(e)));
+                        }
                     }
                     Poll::Ready(me.next_data().transpose())
                 }

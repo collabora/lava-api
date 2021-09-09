@@ -1,9 +1,9 @@
 pub mod device;
+pub mod job;
 mod paginator;
 mod queryset;
 pub mod tag;
 pub mod worker;
-pub mod job;
 
 use futures::stream::TryStreamExt;
 use log::debug;
@@ -102,7 +102,10 @@ impl Lava {
     }
 
     pub fn workers(&self) -> Paginator<Worker> {
-        let url = self.base.join("workers/").expect("Failed to append to base url");
+        let url = self
+            .base
+            .join("workers/")
+            .expect("Failed to append to base url");
         Paginator::new(self.client.clone(), url)
     }
 }

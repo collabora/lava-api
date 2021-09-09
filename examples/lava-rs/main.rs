@@ -1,10 +1,10 @@
 use anyhow::Error;
+use futures::stream::TryStreamExt;
 use lava_api::device;
 use lava_api::job;
 use lava_api::worker::{self, Worker};
 use lava_api::Lava;
 use structopt::StructOpt;
-use futures::stream::TryStreamExt;
 
 fn device_health_to_emoji(health: device::Health) -> &'static str {
     use device::Health::*;
@@ -74,21 +74,23 @@ async fn main() -> Result<(), Error> {
     }
 
     println!("\nQueued Jobs:");
-    let mut jobs = l.jobs().limit(opts.limit).state(job::State::Submitted).query();
+    let mut jobs = l
+        .jobs()
+        .limit(opts.limit)
+        .state(job::State::Submitted)
+        .query();
     let mut num = opts.limit;
     while let Some(w) = jobs.try_next().await? {
         println!(" 💤️  [{}]  {}", w.id, w.description);
         num = num - 1;
         if num == 0 {
             match jobs.reported_items() {
-                Some(n) => println!("\n…and {} more jobs", n-10),
-                None => println!("\n…and an unknown amount of jobs")
+                Some(n) => println!("\n…and {} more jobs", n - 10),
+                None => println!("\n…and an unknown amount of jobs"),
             };
             break;
         }
     }
-
-
 
     Ok(())
 }
