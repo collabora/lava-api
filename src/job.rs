@@ -172,6 +172,32 @@ impl<'a> JobsBuilder<'a> {
         self
     }
 
+    /// Set the number of jobs retrieved at a time while the query is
+    /// running. The query will be processed transparently as a
+    /// sequence of requests that return all matching responses. This
+    /// setting governs the size of each of the (otherwise
+    /// transparent) requests, so this number is really a page size.
+    ///
+    /// Note that you will see artifacts on queries that are split
+    /// into many requests, especially when responses are slow. This
+    /// makes setting the limit much smaller than the response size
+    /// unattractive when accurate data is required. However, the
+    /// server will need to return records in chunks of this size,
+    /// regardless of how many are consumed from the response stream,
+    /// which makes setting the limit much higher than the response
+    /// size wasteful. In practice, it is probably best to set this
+    /// limit to the expected response size for most use cases.
+    ///
+    /// Artifacts occur when paging occurs, because paging is entirely
+    /// client side. Each page contains a section of the query
+    /// begining with the job at some multiple of the limit count into
+    /// the result set.  However the result set is evolving while the
+    /// paging is occurring, and this is not currently compensated
+    /// for, which leads to jobs being returned multiple times at the
+    /// boundaries between pages - or even omitted depending on the
+    /// query. In general, query sets that can shrink are not safe to
+    /// use with paging, because results can be lost rather than
+    /// duplicated.
     pub fn limit(mut self, limit: u32) -> Self {
         self.limit = Some(limit);
         self
