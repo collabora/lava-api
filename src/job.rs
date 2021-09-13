@@ -7,7 +7,7 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use strum::{EnumIter, IntoEnumIterator};
+use strum::{Display, EnumIter, IntoEnumIterator};
 use thiserror::Error;
 
 use crate::paginator::{PaginationError, Paginator};
@@ -15,7 +15,7 @@ use crate::queryset::{QuerySet, QuerySetMember};
 use crate::tag::Tag;
 use crate::Lava;
 
-#[derive(Copy, Deserialize, Clone, Debug, Hash, PartialEq, Eq, EnumIter)]
+#[derive(Copy, Deserialize, Clone, Debug, Hash, PartialEq, Eq, EnumIter, Display)]
 #[serde(try_from = "&str")]
 pub enum State {
     Submitted,
@@ -24,19 +24,6 @@ pub enum State {
     Running,
     Canceling,
     Finished,
-}
-
-impl fmt::Display for State {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            State::Submitted => write!(f, "Submitted"),
-            State::Scheduling => write!(f, "Scheduling"),
-            State::Scheduled => write!(f, "Scheduled"),
-            State::Running => write!(f, "Running"),
-            State::Canceling => write!(f, "Canceling"),
-            State::Finished => write!(f, "Finished"),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -65,24 +52,13 @@ impl QuerySetMember for State {
     }
 }
 
-#[derive(Copy, Deserialize, Clone, Debug, PartialEq, Eq, Hash, EnumIter)]
+#[derive(Copy, Deserialize, Clone, Debug, PartialEq, Eq, Hash, EnumIter, Display)]
 #[serde(try_from = "&str")]
 pub enum Health {
     Unknown,
     Complete,
     Incomplete,
     Canceled,
-}
-
-impl fmt::Display for Health {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Health::Unknown => write!(f, "Unknown"),
-            Health::Complete => write!(f, "Complete"),
-            Health::Incomplete => write!(f, "Incomplete"),
-            Health::Canceled => write!(f, "Canceled"),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -385,5 +361,25 @@ impl<'a> Stream for Jobs<'a> {
                 },
             };
         }
+    }
+}
+
+mod tests {
+    #[allow(unused_imports)]
+    use super::*;
+
+    #[test]
+    fn test_display() {
+        assert_eq!(State::Submitted.to_string(), "Submitted");
+        assert_eq!(State::Scheduling.to_string(), "Scheduling");
+        assert_eq!(State::Scheduled.to_string(), "Scheduled");
+        assert_eq!(State::Running.to_string(), "Running");
+        assert_eq!(State::Canceling.to_string(), "Canceling");
+        assert_eq!(State::Finished.to_string(), "Finished");
+
+        assert_eq!(Health::Unknown.to_string(), "Unknown");
+        assert_eq!(Health::Complete.to_string(), "Complete");
+        assert_eq!(Health::Incomplete.to_string(), "Incomplete");
+        assert_eq!(Health::Canceled.to_string(), "Canceled");
     }
 }
