@@ -3,20 +3,20 @@ use futures::future::BoxFuture;
 use futures::stream::{self, Stream, StreamExt};
 use futures::FutureExt;
 use serde::Deserialize;
-use std::convert::TryFrom;
+use serde_with::DeserializeFromStr;
 use std::fmt;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use strum::{Display, EnumIter, IntoEnumIterator};
-use thiserror::Error;
+use strum::{Display, EnumIter, EnumString, IntoEnumIterator};
 
 use crate::paginator::{PaginationError, Paginator};
 use crate::queryset::{QuerySet, QuerySetMember};
 use crate::tag::Tag;
 use crate::Lava;
 
-#[derive(Copy, Deserialize, Clone, Debug, Hash, PartialEq, Eq, EnumIter, Display)]
-#[serde(try_from = "&str")]
+#[derive(
+    Copy, Clone, Debug, Hash, PartialEq, Eq, EnumIter, Display, EnumString, DeserializeFromStr,
+)]
 pub enum State {
     Submitted,
     Scheduling,
@@ -26,25 +26,6 @@ pub enum State {
     Finished,
 }
 
-#[derive(Clone, Debug, Error)]
-#[error("Failed to convert into State")]
-pub struct TryFromStateError {}
-
-impl TryFrom<&str> for State {
-    type Error = TryFromStateError;
-    fn try_from(v: &str) -> Result<Self, Self::Error> {
-        match v {
-            "Submitted" => Ok(State::Submitted),
-            "Scheduling" => Ok(State::Scheduling),
-            "Scheduled" => Ok(State::Scheduled),
-            "Running" => Ok(State::Running),
-            "Canceling" => Ok(State::Canceling),
-            "Finished" => Ok(State::Finished),
-            _ => Err(TryFromStateError {}),
-        }
-    }
-}
-
 impl QuerySetMember for State {
     type Iter = StateIter;
     fn all() -> Self::Iter {
@@ -52,30 +33,14 @@ impl QuerySetMember for State {
     }
 }
 
-#[derive(Copy, Deserialize, Clone, Debug, PartialEq, Eq, Hash, EnumIter, Display)]
-#[serde(try_from = "&str")]
+#[derive(
+    Copy, Clone, Debug, PartialEq, Eq, Hash, EnumIter, EnumString, Display, DeserializeFromStr,
+)]
 pub enum Health {
     Unknown,
     Complete,
     Incomplete,
     Canceled,
-}
-
-#[derive(Clone, Debug, Error)]
-#[error("Failed to convert into Health")]
-pub struct TryFromHealthError {}
-
-impl TryFrom<&str> for Health {
-    type Error = TryFromHealthError;
-    fn try_from(v: &str) -> Result<Self, Self::Error> {
-        match v {
-            "Unknown" => Ok(Health::Unknown),
-            "Complete" => Ok(Health::Complete),
-            "Incomplete" => Ok(Health::Incomplete),
-            "Canceled" => Ok(Health::Canceled),
-            _ => Err(TryFromHealthError {}),
-        }
-    }
 }
 
 impl QuerySetMember for Health {
@@ -367,6 +332,8 @@ impl<'a> Stream for Jobs<'a> {
 mod tests {
     #[allow(unused_imports)]
     use super::*;
+    #[allow(unused_imports)]
+    use std::str::FromStr;
 
     #[test]
     fn test_display() {
@@ -381,5 +348,28 @@ mod tests {
         assert_eq!(Health::Complete.to_string(), "Complete");
         assert_eq!(Health::Incomplete.to_string(), "Incomplete");
         assert_eq!(Health::Canceled.to_string(), "Canceled");
+    }
+
+    #[test]
+    fn test_from_str() {
+        assert_eq!(Ok(State::Submitted), State::from_str("Submitted"));
+        assert_eq!(Ok(State::Scheduling), State::from_str("Scheduling"));
+        assert_eq!(Ok(State::Scheduled), State::from_str("Scheduled"));
+        assert_eq!(Ok(State::Running), State::from_str("Running"));
+        assert_eq!(Ok(State::Canceling), State::from_str("Canceling"));
+        assert_eq!(Ok(State::Finished), State::from_str("Finished"));
+        assert_eq!(
+            Err(strum::ParseError::VariantNotFound),
+            State::from_str("womble")
+        );
+
+        assert_eq!(Ok(Health::Unknown), Health::from_str("Unknown"));
+        assert_eq!(Ok(Health::Complete), Health::from_str("Complete"));
+        assert_eq!(Ok(Health::Incomplete), Health::from_str("Incomplete"));
+        assert_eq!(Ok(Health::Canceled), Health::from_str("Canceled"));
+        assert_eq!(
+            Err(strum::ParseError::VariantNotFound),
+            Health::from_str("")
+        );
     }
 }
