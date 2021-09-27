@@ -1,4 +1,4 @@
-use anyhow::Error;
+use anyhow::Result;
 use futures::stream::TryStreamExt;
 use lava_api::device;
 use lava_api::job;
@@ -31,27 +31,8 @@ fn worker_to_emoji(w: &Worker) -> &'static str {
     }
 }
 
-#[derive(StructOpt)]
-struct Opt {
-    #[structopt(short, long, default_value = "https://lava.collabora.com")]
-    url: String,
-    #[structopt(short, long)]
-    token: Option<String>,
-    #[structopt(short, long, default_value = "10")]
-    limit: u32,
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Error> {
-    let env = env_logger::Env::default()
-        .filter_or("LAVA_LOG", "lava_monitor=info")
-        .write_style("LAVA_WRITE_STYLE");
-    env_logger::init_from_env(env);
-
-    let opts = Opt::from_args();
-    let l = Lava::new(&opts.url, opts.token).unwrap();
-
-    let mut devices = l.devices();
+async fn devices(lava: &Lava) -> Result<()> {
+    let mut devices = lava.devices();
     println!("Devices:");
     while let Some(d) = devices.try_next().await? {
         println!(
@@ -66,15 +47,12 @@ async fn main() -> Result<(), Error> {
                 .join(", "),
         );
     }
+    Ok(())
+}
 
-    println!("\nWorkers:");
-    let mut workers = l.workers();
-    while let Some(w) = workers.try_next().await? {
-        println!(" {}  {}", worker_to_emoji(&w), w.hostname);
-    }
-
+async fn jobs(lava: &Lava, opts: JobsCmd) -> Result<()> {
     println!("\nQueued Jobs:");
-    let mut jobs = l
+    let mut jobs = lava
         .jobs()
         .limit(opts.limit)
         .state(job::State::Submitted)
@@ -90,6 +68,59 @@ async fn main() -> Result<(), Error> {
             };
             break;
         }
+    }
+    Ok(())
+}
+
+async fn workers(lava: &Lava) -> Result<()> {
+    println!("\nWorkers:");
+    let mut workers = lava.workers();
+    while let Some(w) = workers.try_next().await? {
+        println!(" {}  {}", worker_to_emoji(&w), w.hostname);
+    }
+    Ok(())
+}
+
+#[derive(StructOpt, Debug)]
+struct JobsCmd {
+    #[structopt(short, long, default_value = "10")]
+    limit: u32,
+}
+
+#[derive(StructOpt, Debug)]
+enum Command {
+    /// List devices
+    Devices,
+    /// List workers
+    Workers,
+    /// List jobs
+    Jobs(JobsCmd),
+}
+
+#[derive(StructOpt, Debug)]
+struct Opt {
+    #[structopt(short, long, default_value = "https://lava.collabora.co.uk")]
+    url: String,
+    #[structopt(short, long)]
+    token: Option<String>,
+    #[structopt(subcommand)]
+    command: Command,
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let env = env_logger::Env::default()
+        .filter_or("LAVA_LOG", "lava_monitor=info")
+        .write_style("LAVA_WRITE_STYLE");
+    env_logger::init_from_env(env);
+
+    let opts = Opt::from_args();
+    let l = Lava::new(&opts.url, opts.token)?;
+
+    match opts.command {
+        Command::Devices => devices(&l).await?,
+        Command::Workers => workers(&l).await?,
+        Command::Jobs(j) => jobs(&l, j).await?,
     }
 
     Ok(())
