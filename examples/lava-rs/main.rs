@@ -1,3 +1,11 @@
+use std::fs::File;
+use std::io::Read;
+use std::path::PathBuf;
+use std::time::Duration;
+
+use anyhow::anyhow;
+use anyhow::bail;
+use anyhow::Context;
 use anyhow::Result;
 use futures::stream::TryStreamExt;
 use lava_api::device;
@@ -5,6 +13,7 @@ use lava_api::job;
 use lava_api::worker::{self, Worker};
 use lava_api::Lava;
 use structopt::StructOpt;
+use tokio::time::sleep;
 
 fn device_health_to_emoji(health: device::Health) -> &'static str {
     use device::Health::*;
@@ -72,6 +81,39 @@ async fn jobs(lava: &Lava, opts: JobsCmd) -> Result<()> {
     Ok(())
 }
 
+async fn submit(lava: &Lava, opts: SubmitCmd) -> Result<()> {
+    let mut job = File::open(opts.job).context("Failed to open job file")?;
+    let mut definition = String::new();
+    job.read_to_string(&mut definition)
+        .context("Failed to read job")?;
+
+    let mut ids = lava.submit_job(&definition).await?;
+    println!("Submitted job(s): {:?}", ids);
+    let id = ids.pop().ok_or(anyhow!("No job id"))?;
+    if opts.follow {
+        // TODO support following more then 1 job
+        let builder = lava.jobs().id(id);
+        loop {
+            let mut jobs = builder.clone().query();
+            match jobs.try_next().await {
+                Ok(Some(job)) => {
+                    println!("State: {}", job.state);
+                    if job.state == job::State::Finished {
+                        break;
+                    }
+                }
+                Ok(None) => bail!("Job not found"),
+                Err(e) => {
+                    println!("Failed to check status: {:?}", e);
+                }
+            }
+
+            sleep(Duration::from_secs(5)).await;
+        }
+    }
+    Ok(())
+}
+
 async fn workers(lava: &Lava) -> Result<()> {
     println!("\nWorkers:");
     let mut workers = lava.workers();
@@ -79,6 +121,13 @@ async fn workers(lava: &Lava) -> Result<()> {
         println!(" {}  {}", worker_to_emoji(&w), w.hostname);
     }
     Ok(())
+}
+
+#[derive(StructOpt, Debug)]
+struct SubmitCmd {
+    #[structopt(short, long)]
+    follow: bool,
+    job: PathBuf,
 }
 
 #[derive(StructOpt, Debug)]
@@ -91,10 +140,12 @@ struct JobsCmd {
 enum Command {
     /// List devices
     Devices,
-    /// List workers
-    Workers,
+    /// Submit a job
+    Submit(SubmitCmd),
     /// List jobs
     Jobs(JobsCmd),
+    /// List workers
+    Workers,
 }
 
 #[derive(StructOpt, Debug)]
@@ -119,8 +170,9 @@ async fn main() -> Result<()> {
 
     match opts.command {
         Command::Devices => devices(&l).await?,
-        Command::Workers => workers(&l).await?,
+        Command::Submit(s) => submit(&l, s).await?,
         Command::Jobs(j) => jobs(&l, j).await?,
+        Command::Workers => workers(&l).await?,
     }
 
     Ok(())
