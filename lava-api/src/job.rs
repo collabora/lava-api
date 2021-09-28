@@ -208,6 +208,7 @@ pub struct JobsBuilder<'a> {
     healths: QuerySet<Health>,
     limit: Option<u32>,
     ordering: Ordering,
+    ids: Vec<i64>,
     id_after: Option<i64>,
     started_after: Option<DateTime<Utc>>,
     submitted_after: Option<DateTime<Utc>>,
@@ -229,6 +230,7 @@ impl<'a> JobsBuilder<'a> {
             healths: QuerySet::new(String::from("health")),
             limit: None,
             ordering: Ordering::Id,
+            ids: Vec::new(),
             id_after: None,
             started_after: None,
             submitted_after: None,
@@ -289,6 +291,12 @@ impl<'a> JobsBuilder<'a> {
     /// Exclude jobs with this health.
     pub fn health_not(mut self, health: Health) -> Self {
         self.healths.exclude(&health);
+        self
+    }
+
+    /// Return only jobs whose id is `id`.
+    pub fn id(mut self, id: i64) -> Self {
+        self.ids.push(id);
         self
     }
 
@@ -353,6 +361,19 @@ impl<'a> JobsBuilder<'a> {
         if let Some(pair) = self.healths.query() {
             url.query_pairs_mut().append_pair(&pair.0, &pair.1);
         }
+
+        match self.ids.len() {
+            0 => (),
+            1 => {
+                url.query_pairs_mut()
+                    .append_pair("id", &self.ids[0].to_string());
+            }
+            _ => {
+                let ids: Vec<_> = self.ids.iter().map(i64::to_string).collect();
+                url.query_pairs_mut().append_pair("id__in", &ids.join(","));
+            }
+        }
+
         if let Some(id_after) = self.id_after {
             url.query_pairs_mut()
                 .append_pair("id__gt", &id_after.to_string());
