@@ -19,6 +19,7 @@ pub trait QuerySetMember: Hash + Eq + Display + Sized + Clone + 'static {
 /// no terms will be added to the filtering for the result set by this
 /// set (i.e. the initial value indicates that all values are
 /// acceptable).
+#[derive(Debug, Clone)]
 pub struct QuerySet<Q: QuerySetMember> {
     /// `values` is initially unset, indicating no filtering on this
     /// field has been requested.

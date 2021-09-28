@@ -61,6 +61,7 @@ impl QuerySetMember for Health {
 ///
 /// These are usually combined with a [`bool`] in use, indicating
 /// whether the order is to be ascending or descending.
+#[derive(Debug, Clone)]
 pub enum Ordering {
     Id,
     StartTime,
@@ -198,6 +199,7 @@ impl<'a> Jobs<'a> {
 /// }
 /// # });
 /// ```
+#[derive(Debug, Clone)]
 pub struct JobsBuilder<'a> {
     lava: &'a Lava,
     states: QuerySet<State>,
