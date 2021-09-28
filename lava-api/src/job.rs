@@ -4,12 +4,14 @@ use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use futures::stream::{self, Stream, StreamExt};
 use futures::FutureExt;
-use serde::Deserialize;
+use reqwest::StatusCode;
+use serde::{Deserialize, Serialize};
 use serde_with::DeserializeFromStr;
 use std::fmt;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use strum::{Display, EnumIter, EnumString, IntoEnumIterator};
+use thiserror::Error;
 
 use crate::paginator::{PaginationError, Paginator};
 use crate::queryset::{QuerySet, QuerySetMember};
@@ -442,6 +444,50 @@ impl<'a> Stream for Jobs<'a> {
                 },
             };
         }
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum SubmissionError {
+    #[error("Request failed {0}")]
+    Request(#[from] reqwest::Error),
+    #[error("Invalid job: {0}")]
+    InvalidJob(String),
+    #[error("Unexpected reply: {0}")]
+    UnexpectedReply(reqwest::StatusCode),
+}
+
+#[derive(Debug, Serialize)]
+struct Submission<'a> {
+    definition: &'a str,
+}
+
+#[derive(Debug, Deserialize)]
+struct SubmissionReply {
+    message: String,
+    #[serde(default)]
+    job_ids: Vec<i64>,
+}
+
+pub async fn submit_job(lava: &Lava, definition: &str) -> Result<Vec<i64>, SubmissionError> {
+    let url = lava
+        .base
+        .join("jobs/")
+        .expect("Failed to append to base url");
+    let sub = Submission { definition };
+
+    let post = lava.client.post(url).json(&sub).send().await?;
+
+    match post.status() {
+        StatusCode::CREATED => {
+            let reply: SubmissionReply = post.json().await?;
+            Ok(reply.job_ids)
+        }
+        StatusCode::BAD_REQUEST => {
+            let reply: SubmissionReply = post.json().await?;
+            Err(SubmissionError::InvalidJob(reply.message))
+        }
+        s => Err(SubmissionError::UnexpectedReply(s)),
     }
 }
 

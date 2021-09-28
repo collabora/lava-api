@@ -182,6 +182,10 @@ impl Lava {
         JobsBuilder::new(self)
     }
 
+    pub async fn submit_job(&self, definition: &str) -> Result<Vec<i64>, job::SubmissionError> {
+        job::submit_job(self, definition).await
+    }
+
     /// Obtain a [`Stream`](futures::stream::Stream) of all the
     /// [`Worker`] instances on the server.
     pub fn workers(&self) -> Paginator<Worker> {
