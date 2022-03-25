@@ -3,6 +3,7 @@ pub mod job;
 mod paginator;
 mod queryset;
 pub mod tag;
+pub mod test;
 pub mod worker;
 
 use futures::stream::TryStreamExt;
@@ -17,6 +18,7 @@ use device::Devices;
 use job::JobsBuilder;
 use paginator::{PaginationError, Paginator};
 use tag::Tag;
+use test::TestCase;
 use thiserror::Error;
 use worker::Worker;
 
@@ -106,6 +108,16 @@ impl Lava {
             .base
             .join("workers/")
             .expect("Failed to append to base url");
+        Paginator::new(self.client.clone(), url)
+    }
+
+    pub fn test_cases(&self, job_id: i64) -> Paginator<TestCase> {
+        let url = self
+            .base
+            .join("jobs/")
+            .and_then(|x| x.join(&format!("{}/", job_id)))
+            .and_then(|x| x.join("tests/"))
+            .expect("Failed to build test case url");
         Paginator::new(self.client.clone(), url)
     }
 }
