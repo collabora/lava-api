@@ -35,7 +35,7 @@ impl<Q: QuerySetMember> QuerySet<Q> {
     pub fn new(field_name: String) -> Self {
         QuerySet {
             values: None,
-            field_name: field_name,
+            field_name,
         }
     }
 
