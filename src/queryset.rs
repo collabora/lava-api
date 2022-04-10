@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::fmt::{Display, Formatter, Result};
+use std::fmt::Display;
 use std::hash::Hash;
 
 /// Implement `QuerySetMember` to include a simple enum into a
@@ -101,9 +101,10 @@ impl<Q: QuerySetMember> QuerySet<Q> {
     }
 }
 
+#[cfg(test)]
 mod tests {
-    #[allow(unused_imports)]
     use super::*;
+    use std::fmt::{Formatter, Result};
     use strum::{EnumIter, IntoEnumIterator};
 
     #[derive(Clone, Debug, Hash, PartialEq, Eq, EnumIter)]

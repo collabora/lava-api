@@ -369,10 +369,9 @@ impl<'a> Stream for Jobs<'a> {
     }
 }
 
+#[cfg(test)]
 mod tests {
-    #[allow(unused_imports)]
-    use super::*;
-    #[allow(unused_imports)]
+    use super::{Health, State};
     use std::str::FromStr;
 
     #[test]
