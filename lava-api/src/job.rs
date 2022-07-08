@@ -371,15 +371,25 @@ impl<'a> Stream for Jobs<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Health, Job, State, Tag};
+    use super::{Health, Job, Ordering, State, Tag};
+    use crate::Lava;
 
+    use boulder::{
+        Buildable, Builder, GeneratableWithPersianRug, GeneratorWithPersianRugMutIterator, Repeat,
+        Some as GSome, SubsetsFromPersianRug, Time,
+    };
+    use chrono::{DateTime, Duration, Utc};
+    use futures::TryStreamExt;
     use lava_api_mock::{
         Device as MockDevice, DeviceType as MockDeviceType, Group as MockGroup, Job as MockJob,
-        JobHealth as MockJobHealth, JobState as MockJobState, Tag as MockTag, User as MockUser,
+        JobHealth as MockJobHealth, JobState as MockJobState, LavaMock, PaginationLimits,
+        PopulationParams, SharedState, Tag as MockTag, User as MockUser,
     };
-    use persian_rug::{Accessor, Context};
+    use persian_rug::{Accessor, Context, Proxy};
+    use std::collections::BTreeMap;
     use std::convert::{Infallible, TryFrom, TryInto};
     use std::str::FromStr;
+    use test_log::test;
 
     impl Job {
         #[persian_rug::constraints(
@@ -504,5 +514,256 @@ mod tests {
             Err(strum::ParseError::VariantNotFound),
             Health::from_str("")
         );
+    }
+
+    /// Stream 50 jobs with a page limit of 7 from the server
+    /// checking that we correctly reconstruct their tags and that
+    /// they are all accounted for (that pagination is handled
+    /// properly)
+    #[test(tokio::test)]
+    async fn test_basic() {
+        let state = SharedState::new_populated(PopulationParams::builder().jobs(50usize).build());
+        let server = LavaMock::new(
+            state.clone(),
+            PaginationLimits::builder().jobs(Some(7)).build(),
+        )
+        .await;
+
+        let mut map = BTreeMap::new();
+        let start = state.access();
+        for j in start.get_iter::<lava_api_mock::Job<lava_api_mock::State>>() {
+            map.insert(j.id, j);
+        }
+
+        let lava = Lava::new(&server.uri(), None).expect("failed to make lava server");
+
+        let mut lj = lava.jobs().query();
+
+        let mut seen = BTreeMap::new();
+        while let Some(job) = lj.try_next().await.expect("failed to get job") {
+            assert!(!seen.contains_key(&job.id));
+            assert!(map.contains_key(&job.id));
+            let jj = map.get(&job.id).unwrap();
+            assert_eq!(job.submitter, start.get(&jj.submitter).username);
+            assert_eq!(job.viewing_groups.len(), jj.viewing_groups.len());
+            for i in 0..job.viewing_groups.len() {
+                assert_eq!(job.viewing_groups[i], start.get(&jj.viewing_groups[i]).id);
+            }
+            assert_eq!(job.description, jj.description);
+            assert_eq!(job.health_check, jj.health_check);
+            assert_eq!(
+                job.requested_device_type.as_ref(),
+                jj.requested_device_type
+                    .as_ref()
+                    .map(|t| &start.get(&t).name)
+            );
+
+            assert_eq!(job.tags.len(), jj.tags.len());
+            for i in 0..job.tags.len() {
+                assert_eq!(job.tags[i].id, start.get(&jj.tags[i]).id);
+                assert_eq!(job.tags[i].name, start.get(&jj.tags[i]).name);
+                assert_eq!(job.tags[i].description, start.get(&jj.tags[i]).description);
+            }
+
+            assert_eq!(
+                job.actual_device.as_ref(),
+                jj.actual_device.as_ref().map(|t| &start.get(&t).hostname)
+            );
+            assert_eq!(Some(job.submit_time), jj.submit_time);
+            assert_eq!(job.start_time, jj.start_time);
+            assert_eq!(job.end_time, jj.end_time);
+            assert_eq!(job.state.to_string(), jj.state.to_string());
+            assert_eq!(job.health.to_string(), jj.health.to_string());
+            assert_eq!(job.priority, jj.priority);
+            assert_eq!(job.definition, jj.definition);
+            assert_eq!(job.original_definition, jj.original_definition);
+            assert_eq!(job.multinode_definition, jj.multinode_definition);
+
+            assert_eq!(job.failure_tags.len(), jj.failure_tags.len());
+            for i in 0..job.failure_tags.len() {
+                assert_eq!(job.viewing_groups[i], start.get(&jj.viewing_groups[i]).id);
+            }
+            assert_eq!(job.failure_comment, jj.failure_comment);
+
+            seen.insert(job.id, job.clone());
+        }
+        assert_eq!(seen.len(), 50);
+    }
+
+    /// Stream 50 jobs with a page limit of 7 from the server
+    /// checking that we correctly reconstruct their tags and that
+    /// they are all accounted for (that pagination is handled
+    /// properly)
+    #[test(tokio::test)]
+    async fn test_jobs_builder() {
+        let mut server = lava_api_mock::LavaMock::new(
+            SharedState::new_populated(
+                PopulationParams::builder()
+                    .tags(5usize)
+                    .jobs(0usize)
+                    .build(),
+            ),
+            PaginationLimits::builder().jobs(Some(7)).build(),
+        )
+        .await;
+
+        let base_date = DateTime::parse_from_rfc3339("2022-04-10T16:30:00+01:00")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let mut gen = Proxy::<lava_api_mock::Job<lava_api_mock::State>>::generator()
+            .tags(SubsetsFromPersianRug::new())
+            .health(Repeat!(
+                MockJobHealth::Complete,
+                MockJobHealth::Incomplete,
+                MockJobHealth::Canceled,
+                MockJobHealth::Unknown
+            ))
+            .state(Repeat!(
+                MockJobState::Submitted,
+                MockJobState::Scheduling,
+                MockJobState::Scheduled,
+                MockJobState::Running,
+                MockJobState::Canceling,
+                MockJobState::Finished
+            ))
+            .submit_time(GSome(Time::new(
+                base_date - Duration::minutes(1),
+                Duration::minutes(-1),
+            )))
+            .start_time(GSome(Time::new(base_date.clone(), Duration::minutes(-1))))
+            .end_time(GSome(Time::new(base_date.clone(), Duration::seconds(-30))));
+
+        let _ = GeneratorWithPersianRugMutIterator::new(&mut gen, server.state_mut())
+            .take(50)
+            .collect::<Vec<_>>();
+
+        let lava = Lava::new(&server.uri(), None).expect("failed to make lava server");
+
+        let mut lj = lava.jobs().state(State::Running).query();
+
+        let mut count = 0;
+        while let Some(job) = lj.try_next().await.expect("failed to get job") {
+            assert_eq!(job.state, State::Running);
+            count += 1;
+        }
+        assert_eq!(count, 8);
+
+        let mut lj = lava.jobs().state_not(State::Canceling).query();
+        let mut count = 0;
+        while let Some(job) = lj.try_next().await.expect("failed to get job") {
+            assert_ne!(job.state, State::Canceling);
+            count += 1;
+        }
+        assert_eq!(count, 42);
+
+        let mut lj = lava.jobs().health(Health::Incomplete).query();
+
+        let mut count = 0;
+        while let Some(job) = lj.try_next().await.expect("failed to get job") {
+            assert_eq!(job.health, Health::Incomplete);
+            count += 1;
+        }
+        assert_eq!(count, 13);
+
+        let mut lj = lava.jobs().health_not(Health::Canceled).query();
+        let mut count = 0;
+        while let Some(job) = lj.try_next().await.expect("failed to get job") {
+            assert_ne!(job.health, Health::Canceled);
+            count += 1;
+        }
+        assert_eq!(count, 38);
+
+        let mut lj = lava.jobs().id_after(9i64).query();
+        let mut count = 0;
+        while let Some(job) = lj.try_next().await.expect("failed to get job") {
+            assert!(job.id > 9i64);
+            count += 1;
+        }
+        assert_eq!(count, 40);
+
+        let job_35_start = DateTime::parse_from_rfc3339("2022-04-10T15:55:00+01:00")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let mut lj = lava.jobs().started_after(job_35_start).query();
+        let mut count = 0;
+        while let Some(job) = lj.try_next().await.expect("failed to get job") {
+            assert!(job.start_time.is_some() && job.start_time.unwrap() > job_35_start);
+            count += 1;
+        }
+        assert_eq!(count, 35);
+
+        let job_19_submit = DateTime::parse_from_rfc3339("2022-04-10T16:10:00+01:00")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let mut lj = lava.jobs().submitted_after(job_19_submit).query();
+        let mut count = 0;
+        while let Some(job) = lj.try_next().await.expect("failed to get job") {
+            assert!(job.submit_time > job_19_submit);
+            count += 1;
+        }
+        assert_eq!(count, 19);
+
+        let job_25_end = DateTime::parse_from_rfc3339("2022-04-10T16:17:30+01:00")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let mut lj = lava.jobs().ended_after(job_25_end).query();
+        let mut count = 0;
+        while let Some(job) = lj.try_next().await.expect("failed to get job") {
+            assert!(job.end_time.is_some() && job.end_time.unwrap() > job_25_end);
+            count += 1;
+        }
+        assert_eq!(count, 25);
+
+        let mut lj = lava.jobs().ordering(Ordering::SubmitTime, false).query();
+        let mut count = 0;
+        let mut prev = None;
+        while let Some(job) = lj.try_next().await.expect("failed to get job") {
+            if let Some(dt) = prev {
+                assert!(job.submit_time < dt);
+            }
+            prev = Some(job.submit_time);
+            count += 1;
+        }
+        assert_eq!(count, 50);
+
+        let mut lj = lava.jobs().ordering(Ordering::SubmitTime, true).query();
+        let mut count = 0;
+        let mut prev = None;
+        while let Some(job) = lj.try_next().await.expect("failed to get job") {
+            if let Some(dt) = prev {
+                assert!(job.submit_time > dt);
+            }
+            prev = Some(job.submit_time);
+            count += 1;
+        }
+        assert_eq!(count, 50);
+
+        let mut lj = lava.jobs().ordering(Ordering::StartTime, false).query();
+        let mut count = 0;
+        let mut prev = None;
+        while let Some(job) = lj.try_next().await.expect("failed to get job") {
+            if let Some(dt) = prev {
+                assert!(job.start_time < dt);
+            }
+            prev = Some(job.start_time);
+            count += 1;
+        }
+        assert_eq!(count, 50);
+
+        let mut lj = lava.jobs().ordering(Ordering::StartTime, true).query();
+        let mut count = 0;
+        let mut prev = None;
+        while let Some(job) = lj.try_next().await.expect("failed to get job") {
+            if let Some(dt) = prev {
+                assert!(job.start_time > dt);
+            }
+            prev = Some(job.start_time);
+            count += 1;
+        }
+        assert_eq!(count, 50);
     }
 }

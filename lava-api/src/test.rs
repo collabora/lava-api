@@ -133,7 +133,15 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{ErrorType, Metadata, PassFail, TestCase};
+
+    use crate::Lava;
+    use boulder::{Buildable, Builder};
+    use futures::TryStreamExt;
+    use lava_api_mock::{Job, LavaMock, PaginationLimits, PopulationParams, SharedState, State};
+    use persian_rug::Accessor;
+    use std::collections::BTreeMap;
+    use test_log::test;
 
     #[test]
     fn test_meta() {
@@ -224,5 +232,64 @@ result: fail
         );
         assert_eq!(tc.suite, 10892144i64);
         assert_eq!(tc.test_set, None);
+    }
+
+    /// Stream 20 tests each from 3 jobs with a page limit of 6 from
+    /// the server checking that they are all accounted for (that
+    /// pagination is handled properly)
+    #[test(tokio::test)]
+    async fn test_basic() {
+        let pop = PopulationParams::builder()
+            .jobs(3usize)
+            .test_suites(6usize)
+            .test_cases(20usize)
+            .build();
+        let state = SharedState::new_populated(pop);
+        let server = LavaMock::new(
+            state.clone(),
+            PaginationLimits::builder().test_cases(Some(6)).build(),
+        )
+        .await;
+
+        let mut map = BTreeMap::new();
+        let start = state.access();
+        for t in start.get_iter::<lava_api_mock::TestCase<State>>() {
+            map.insert(t.id, t.clone());
+        }
+
+        let lava = Lava::new(&server.uri(), None).expect("failed to make lava server");
+
+        let mut seen = BTreeMap::new();
+
+        for job in start.get_iter::<Job<State>>() {
+            let mut lt = lava.test_cases(job.id);
+
+            while let Some(test) = lt.try_next().await.expect("failed to get test") {
+                assert!(!seen.contains_key(&test.id));
+                assert!(map.contains_key(&test.id));
+                let tt = map.get(&test.id).unwrap();
+                assert_eq!(test.id, tt.id);
+                assert_eq!(test.name, tt.name);
+                assert_eq!(test.unit, tt.unit);
+                assert_eq!(test.result.to_string(), tt.result.to_string());
+                assert_eq!(
+                    test.measurement,
+                    tt.measurement.as_ref().map(|m| m.to_string())
+                );
+                assert_eq!(test.suite, start.get(&tt.suite).id);
+                assert_eq!(job.id, start.get(&start.get(&tt.suite).job).id);
+                assert_eq!(test.start_log_line, tt.start_log_line);
+                assert_eq!(test.end_log_line, tt.end_log_line);
+                assert_eq!(
+                    test.test_set,
+                    tt.test_set.as_ref().map(|t| start.get(&t).id)
+                );
+                assert_eq!(test.logged, tt.logged);
+                assert_eq!(test.resource_uri, tt.resource_uri);
+
+                seen.insert(test.id, test.clone());
+            }
+        }
+        assert_eq!(seen.len(), 60);
     }
 }

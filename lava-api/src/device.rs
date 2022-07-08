@@ -119,13 +119,19 @@ impl<'a> Stream for Devices<'a> {
 #[cfg(test)]
 mod tests {
     use super::{Device, Health, Tag};
+    use crate::Lava;
 
+    use boulder::{Buildable, Builder};
+    use futures::TryStreamExt;
     use lava_api_mock::{
         Device as MockDevice, DeviceHealth as MockDeviceHealth, DeviceType as MockDeviceType,
-        Tag as MockTag, Worker as MockWorker,
+        LavaMock, PaginationLimits, PopulationParams, SharedState, State, Tag as MockTag,
+        Worker as MockWorker,
     };
     use persian_rug::{Accessor, Context};
+    use std::collections::BTreeMap;
     use std::convert::{Infallible, TryFrom, TryInto};
+    use test_log::test;
 
     impl TryFrom<MockDeviceHealth> for Health {
         type Error = Infallible;
@@ -162,5 +168,55 @@ mod tests {
                     .collect::<Vec<_>>(),
             }
         }
+    }
+
+    /// Stream 50 devices with a page limit of 5 from the server
+    /// checking that we correctly reconstruct their tags and that
+    /// they are all accounted for (that pagination is handled
+    /// properly)
+    #[test(tokio::test)]
+    async fn test_basic() {
+        let state =
+            SharedState::new_populated(PopulationParams::builder().devices(50usize).build());
+        let server = LavaMock::new(
+            state.clone(),
+            PaginationLimits::builder().devices(Some(5)).build(),
+        )
+        .await;
+
+        let mut map = BTreeMap::new();
+        let start = state.access();
+        for device in start.get_iter::<lava_api_mock::Device<State>>() {
+            map.insert(device.hostname.clone(), device);
+        }
+
+        let lava = Lava::new(&server.uri(), None).expect("failed to make lava server");
+
+        let mut ld = lava.devices();
+
+        let mut seen = BTreeMap::new();
+        while let Some(device) = ld.try_next().await.expect("failed to get device") {
+            assert!(!seen.contains_key(&device.hostname));
+            assert!(map.contains_key(&device.hostname));
+            let dev = map.get(&device.hostname).unwrap();
+            assert_eq!(device.hostname, dev.hostname);
+            assert_eq!(device.worker_host, start.get(&dev.worker_host).hostname);
+            assert_eq!(device.device_type, start.get(&dev.device_type).name);
+            assert_eq!(device.description, dev.description);
+            assert_eq!(device.health.to_string(), dev.health.to_string());
+
+            assert_eq!(device.tags.len(), dev.tags.len());
+            for i in 0..device.tags.len() {
+                assert_eq!(device.tags[i].id, start.get(&dev.tags[i]).id);
+                assert_eq!(device.tags[i].name, start.get(&dev.tags[i]).name);
+                assert_eq!(
+                    device.tags[i].description,
+                    start.get(&dev.tags[i]).description
+                );
+            }
+
+            seen.insert(device.hostname.clone(), device.clone());
+        }
+        assert_eq!(seen.len(), 50);
     }
 }
