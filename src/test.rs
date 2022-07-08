@@ -69,7 +69,7 @@ pub struct Metadata {
 // From lava/lava_results_app/models.py in TestCase
 #[derive(Clone, Debug, Deserialize)]
 pub struct TestCase {
-    pub id: u64,
+    pub id: i64,
     pub name: String,
     // Renamed in the v02 api from "units" (in the model) to "unit"
     pub unit: String,
@@ -77,10 +77,10 @@ pub struct TestCase {
     pub measurement: Option<String>,
     #[serde(deserialize_with = "nested_yaml")]
     pub metadata: Option<Metadata>,
-    pub suite: u64,
+    pub suite: i64,
     pub start_log_line: Option<u32>,
     pub end_log_line: Option<u32>,
-    pub test_set: Option<u64>,
+    pub test_set: Option<i64>,
     pub logged: DateTime<Utc>,
     // from v02 api
     pub resource_uri: String,
@@ -196,7 +196,7 @@ result: fail
   "test_set": null
 }"#;
         let tc: TestCase = serde_json::from_str(json).expect("failed to deserialize testcase");
-        assert_eq!(tc.id, 207021205u64);
+        assert_eq!(tc.id, 207021205i64);
         assert_eq!(tc.result, PassFail::Pass);
         assert_eq!(
             tc.resource_uri,
@@ -222,7 +222,7 @@ result: fail
             chrono::DateTime::parse_from_rfc3339("2022-02-28T19:29:01.998922Z")
                 .expect("parsing date")
         );
-        assert_eq!(tc.suite, 10892144u64);
+        assert_eq!(tc.suite, 10892144i64);
         assert_eq!(tc.test_set, None);
     }
 }
