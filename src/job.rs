@@ -91,7 +91,7 @@ struct LavaJob {
     failure_comment: Option<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Job {
     pub id: i64,
     pub submitter: String,

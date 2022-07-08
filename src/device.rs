@@ -31,7 +31,7 @@ struct LavaDevice {
     pub tags: Vec<u32>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Device {
     pub hostname: String,
     pub worker_host: String,
