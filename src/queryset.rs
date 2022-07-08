@@ -46,9 +46,7 @@ impl<Q: QuerySetMember> QuerySet<Q> {
     /// previous called, `include()` adds the value to the value set
     /// if it is not present, but does not remove any previously matched values.
     pub fn include(&mut self, value: Q) -> &mut Self {
-        self.values
-            .get_or_insert_with(|| HashSet::new())
-            .insert(value);
+        self.values.get_or_insert_with(HashSet::new).insert(value);
         self
     }
 
