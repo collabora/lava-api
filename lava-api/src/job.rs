@@ -1,3 +1,5 @@
+//! Retrieve jobs
+
 use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use futures::stream::{self, Stream, StreamExt};
@@ -14,6 +16,7 @@ use crate::queryset::{QuerySet, QuerySetMember};
 use crate::tag::Tag;
 use crate::Lava;
 
+/// The progress of a job through the system.
 #[derive(
     Copy, Clone, Debug, Hash, PartialEq, Eq, EnumIter, Display, EnumString, DeserializeFromStr,
 )]
@@ -33,12 +36,16 @@ impl QuerySetMember for State {
     }
 }
 
+/// The completion state of a job.
 #[derive(
     Copy, Clone, Debug, PartialEq, Eq, Hash, EnumIter, EnumString, Display, DeserializeFromStr,
 )]
 pub enum Health {
+    /// Unknown is the usual state before the job has finished.
     Unknown,
+    /// Complete is used as the success state in general.
     Complete,
+    /// Incomplete is used as the error state.
     Incomplete,
     Canceled,
 }
@@ -50,6 +57,10 @@ impl QuerySetMember for Health {
     }
 }
 
+/// The possible orderings in which jobs can be returned
+///
+/// These are usually combined with a [`bool`] in use, indicating
+/// whether the order is to be ascending or descending.
 pub enum Ordering {
     Id,
     StartTime,
@@ -91,6 +102,12 @@ struct LavaJob {
     failure_comment: Option<String>,
 }
 
+/// The data available for a job from the LAVA API
+///
+/// Note that [`tags`](Job::tags) have been resolved into [`Tag`]
+/// objects, rather than tag ids, but that
+/// [`viewing_groups`](Job::viewing_groups) and
+/// [`failure_tags`](Job::failure_tags) have not.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Job {
     pub id: i64,
@@ -119,6 +136,11 @@ enum PagingState<'a> {
     Transforming(BoxFuture<'a, Job>),
 }
 
+/// A [`Stream`] that yields a selected subset of the [`Job`]
+/// instances on a LAVA server.
+///
+/// These are constructed using a [`JobsBuilder`]; there is no `new`
+/// method on this struct.
 pub struct Jobs<'a> {
     lava: &'a Lava,
     paginator: Paginator<LavaJob>,
@@ -126,11 +148,56 @@ pub struct Jobs<'a> {
 }
 
 impl<'a> Jobs<'a> {
+    /// The server's latest report of how many [`Job`] instances are
+    /// in the result set.
+    ///
+    /// Note that this is not the total number of instances, only the
+    /// total number matching the query. Also, note that the number is
+    /// subject to change as the stream is read, owing to pagination;
+    /// this number will always be the number of results most recently
+    /// reported, and can be an over- or under-estimate by the time
+    /// the stream is drained.
     pub fn reported_items(&self) -> Option<u32> {
         self.paginator.reported_items()
     }
 }
 
+/// Select a set of [`Job`] instances to return from the LAVA server.
+///
+/// This is the way to construct a [`Jobs`] object, which can stream
+/// the actual data. It allows customisation of which jobs to return,
+/// and in what order.
+///
+/// Example:
+/// ```rust
+/// use futures::stream::TryStreamExt;
+/// # use lava_api_mock::{LavaMock, PaginationLimits, PopulationParams, SharedState};
+/// use lava_api::{Lava, job::State, job::Ordering};
+/// #
+/// # tokio_test::block_on( async {
+/// # let limits = PaginationLimits::new();
+/// # let population = PopulationParams::new();
+/// # let mock = LavaMock::new(SharedState::new_populated(population), limits).await;
+/// # let service_uri = mock.uri();
+/// # let lava_token = None;
+///
+/// let lava = Lava::new(&service_uri, lava_token).expect("failed to make lava");
+///
+/// let mut lj = lava
+///     .jobs()
+///     .state(State::Submitted)
+///     .ordering(Ordering::StartTime, true)
+///     .query();
+///
+/// while let Some(job) = lj
+///     .try_next()
+///     .await
+///     .expect("failed to get job")
+/// {
+///     println!("Got job {:?}", job);
+/// }
+/// # });
+/// ```
 pub struct JobsBuilder<'a> {
     lava: &'a Lava,
     states: QuerySet<State>,
@@ -145,6 +212,12 @@ pub struct JobsBuilder<'a> {
 }
 
 impl<'a> JobsBuilder<'a> {
+    /// Create a new [`JobsBuilder`]
+    ///
+    /// The default query is:
+    /// - order by [`Ordering::Id`]
+    /// - no filtering
+    /// - default result pagination
     pub fn new(lava: &'a Lava) -> Self {
         Self {
             lava,
@@ -248,6 +321,7 @@ impl<'a> JobsBuilder<'a> {
         self
     }
 
+    /// Begin querying for jobs, returning a [`Jobs`] instance
     pub fn query(self) -> Jobs<'a> {
         let mut url = self
             .lava

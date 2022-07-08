@@ -1,3 +1,5 @@
+//! Retrieve test data
+
 use chrono::{DateTime, Utc};
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer};
@@ -5,6 +7,7 @@ use serde_with::DeserializeFromStr;
 use std::fmt;
 use strum::{Display, EnumString};
 
+/// The result of running a [`TestCase`], as stored by LAVA
 // From lava/lava_results_app/models.py in TestCase::RESULT_CHOICES
 #[derive(Copy, DeserializeFromStr, Clone, Debug, Display, EnumString, PartialEq)]
 #[strum(serialize_all = "snake_case")]
@@ -15,6 +18,7 @@ pub enum PassFail {
     Unknown,
 }
 
+/// The type of an error that occurred running a test
 // From lava/lava_common/exceptions.py as the error_type fields of the classes
 #[derive(Copy, DeserializeFromStr, Clone, Debug, Display, EnumString, PartialEq)]
 pub enum ErrorType {
@@ -33,6 +37,7 @@ pub enum ErrorType {
     UnexistingPermissionCodename,
 }
 
+/// The metadata available for a [`TestCase`] from the LAVA API
 // This structure is an amalgam of things handed to
 // - lava/lava_common/log.py YAMLLogger::results
 // particularly by
@@ -66,6 +71,8 @@ pub struct Metadata {
     pub error_type: Option<ErrorType>,
 }
 
+/// The data available for a test case for a [`Job`](crate::job::Job)
+/// from the LAVA API
 // From lava/lava_results_app/models.py in TestCase
 #[derive(Clone, Debug, Deserialize)]
 pub struct TestCase {

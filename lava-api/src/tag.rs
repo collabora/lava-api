@@ -1,9 +1,15 @@
+//! Retrieve tags
+
 use serde::Deserialize;
 
+/// Metadata for a tag on the LAVA server
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
 pub struct Tag {
+    /// The unique id of the tag
     pub id: u32,
+    /// The name of the tag
     pub name: String,
+    /// An optional description for this tag
     pub description: Option<String>,
 }
 

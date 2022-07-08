@@ -1,3 +1,5 @@
+//! Retrieve devices
+
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use futures::{stream, stream::Stream, stream::StreamExt};
@@ -11,6 +13,7 @@ use crate::paginator::{PaginationError, Paginator};
 use crate::tag::Tag;
 use crate::Lava;
 
+/// The current status of a [`Device`]
 #[derive(Clone, Copy, Debug, DeserializeFromStr, Display, EnumString, Eq, PartialEq)]
 pub enum Health {
     Unknown,
@@ -31,6 +34,10 @@ struct LavaDevice {
     pub tags: Vec<u32>,
 }
 
+/// A subset of the data available for a device from the LAVA API.
+///
+/// Note that [`tags`](Device::tags) have been resolved into [`Tag`]
+/// objects, rather than tag ids.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Device {
     pub hostname: String,
@@ -46,6 +53,8 @@ enum State<'a> {
     Transforming(BoxFuture<'a, Device>),
 }
 
+/// A [`Stream`] that yields all the [`Device`] instances on a LAVA
+/// server.
 pub struct Devices<'a> {
     lava: &'a Lava,
     paginator: Paginator<LavaDevice>,
@@ -53,6 +62,13 @@ pub struct Devices<'a> {
 }
 
 impl<'a> Devices<'a> {
+    /// Create a new stream, using the given [`Lava`] proxy.
+    ///
+    /// Note that due to pagination, the dataset returned is not
+    /// guaranteed to be self-consistent, and the odds of
+    /// self-consistency decrease the longer it takes to iterate over
+    /// the stream. It is therefore advisable to extract whatever data
+    /// is required immediately after the creation of this object.
     pub fn new(lava: &'a Lava) -> Self {
         let url = lava
             .base

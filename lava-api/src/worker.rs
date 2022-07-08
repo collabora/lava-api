@@ -1,7 +1,10 @@
+//! Retrieve workers
+
 use serde::Deserialize;
 use serde_with::DeserializeFromStr;
 use strum::{Display, EnumString};
 
+/// The current usage of a worker
 #[derive(Copy, Clone, Debug, DeserializeFromStr, Display, EnumString, PartialEq)]
 pub enum Health {
     Active,
@@ -9,12 +12,14 @@ pub enum Health {
     Retired,
 }
 
+/// The online status of a worker
 #[derive(Copy, Clone, Debug, DeserializeFromStr, Display, EnumString, PartialEq)]
 pub enum State {
     Online,
     Offline,
 }
 
+/// A subset of the available data for a worker from LAVA
 #[derive(Clone, Deserialize, Debug)]
 pub struct Worker {
     pub hostname: String,
