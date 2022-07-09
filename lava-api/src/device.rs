@@ -115,3 +115,52 @@ impl<'a> Stream for Devices<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Device, Health, Tag};
+
+    use lava_api_mock::{
+        Device as MockDevice, DeviceHealth as MockDeviceHealth, DeviceType as MockDeviceType,
+        Tag as MockTag, Worker as MockWorker,
+    };
+    use persian_rug::{Accessor, Context};
+    use std::convert::{Infallible, TryFrom, TryInto};
+
+    impl TryFrom<MockDeviceHealth> for Health {
+        type Error = Infallible;
+        fn try_from(dev: MockDeviceHealth) -> Result<Health, Self::Error> {
+            use Health::*;
+            match dev {
+                MockDeviceHealth::Unknown => Ok(Unknown),
+                MockDeviceHealth::Maintenance => Ok(Maintenance),
+                MockDeviceHealth::Good => Ok(Good),
+                MockDeviceHealth::Bad => Ok(Bad),
+                MockDeviceHealth::Looping => Ok(Looping),
+                MockDeviceHealth::Retired => Ok(Retired),
+            }
+        }
+    }
+
+    impl Device {
+        #[persian_rug::constraints(context = C, access(MockTag<C>, MockDeviceType<C>, MockWorker<C>))]
+        pub fn from_mock<'b, B, C>(dev: &MockDevice<C>, context: B) -> Device
+        where
+            B: 'b + Accessor<Context = C>,
+            C: Context + 'static,
+        {
+            Self {
+                hostname: dev.hostname.clone(),
+                worker_host: context.get(&dev.worker_host).hostname.clone(),
+                device_type: context.get(&dev.device_type).name.clone(),
+                description: dev.description.clone(),
+                health: dev.health.clone().try_into().unwrap(),
+                tags: dev
+                    .tags
+                    .iter()
+                    .map(|t| Tag::from_mock(context.get(t), context.clone()))
+                    .collect::<Vec<_>>(),
+            }
+        }
+    }
+}

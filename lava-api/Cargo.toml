@@ -25,3 +25,5 @@ strum = { version = "0.24", features = ["derive"] }
 anyhow = "1"
 structopt = "0.3"
 env_logger = "0.8"
+lava-api-mock = { path = "../lava-api-mock" }
+persian-rug = "0.1"

@@ -371,8 +371,102 @@ impl<'a> Stream for Jobs<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Health, State};
+    use super::{Health, Job, State, Tag};
+
+    use lava_api_mock::{
+        Device as MockDevice, DeviceType as MockDeviceType, Group as MockGroup, Job as MockJob,
+        JobHealth as MockJobHealth, JobState as MockJobState, Tag as MockTag, User as MockUser,
+    };
+    use persian_rug::{Accessor, Context};
+    use std::convert::{Infallible, TryFrom, TryInto};
     use std::str::FromStr;
+
+    impl Job {
+        #[persian_rug::constraints(
+            context = C,
+            access(
+                MockUser<C>,
+                MockGroup<C>,
+                MockTag<C>,
+                MockDevice<C>,
+                MockDeviceType<C>
+            )
+        )]
+        pub fn from_mock<'b, B, C>(job: &MockJob<C>, context: B) -> Job
+        where
+            B: 'b + Accessor<Context = C>,
+            C: Context + 'static,
+        {
+            Self {
+                id: job.id,
+                submitter: context.get(&job.submitter).username.clone(),
+                viewing_groups: job
+                    .viewing_groups
+                    .iter()
+                    .map(|g| context.get(g).id)
+                    .collect::<Vec<_>>(),
+                description: job.description.clone(),
+                health_check: job.health_check,
+                requested_device_type: job
+                    .requested_device_type
+                    .map(|d| context.get(&d).name.to_string()),
+                tags: job
+                    .tags
+                    .iter()
+                    .map(|t| Tag::from_mock(context.get(t), context.clone()))
+                    .collect::<Vec<_>>(),
+                actual_device: job
+                    .actual_device
+                    .as_ref()
+                    .map(|d| context.get(d).hostname.to_string()),
+                submit_time: job.submit_time.unwrap(),
+                start_time: job.start_time,
+                end_time: job.end_time,
+                state: job.state.try_into().unwrap(),
+                health: job.health.try_into().unwrap(),
+                priority: job.priority,
+                definition: job.definition.clone(),
+                original_definition: job.original_definition.clone(),
+                multinode_definition: job.multinode_definition.clone(),
+                failure_tags: job
+                    .failure_tags
+                    .iter()
+                    .map(|t| Tag::from_mock(context.get(t), context.clone()))
+                    .collect::<Vec<_>>(),
+                failure_comment: job.failure_comment.clone(),
+            }
+        }
+    }
+
+    impl TryFrom<MockJobState> for State {
+        type Error = Infallible;
+        fn try_from(state: MockJobState) -> Result<State, Self::Error> {
+            use State::*;
+
+            match state {
+                MockJobState::Submitted => Ok(Submitted),
+                MockJobState::Scheduling => Ok(Scheduling),
+                MockJobState::Scheduled => Ok(Scheduled),
+                MockJobState::Running => Ok(Running),
+                MockJobState::Canceling => Ok(Canceling),
+                MockJobState::Finished => Ok(Finished),
+            }
+        }
+    }
+
+    impl TryFrom<MockJobHealth> for Health {
+        type Error = Infallible;
+        fn try_from(health: MockJobHealth) -> Result<Health, Self::Error> {
+            use Health::*;
+
+            match health {
+                MockJobHealth::Unknown => Ok(Unknown),
+                MockJobHealth::Complete => Ok(Complete),
+                MockJobHealth::Incomplete => Ok(Incomplete),
+                MockJobHealth::Canceled => Ok(Canceled),
+            }
+        }
+    }
 
     #[test]
     fn test_display() {
