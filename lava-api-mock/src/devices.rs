@@ -127,3 +127,221 @@ pub enum State {
 
 impl django_query::filtering::ops::Scalar for State {}
 impl django_query::row::StringCellValue for State {}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::state::{self, SharedState};
+
+    use anyhow::Result;
+    use boulder::BuilderWithPersianRug;
+    use boulder::GeneratorWithPersianRugIterator;
+    use boulder::Repeat;
+    use serde_json::{json, Value};
+    use test_log::test;
+
+    async fn make_request<T, U>(server_uri: T, endpoint: U) -> Result<Value>
+    where
+        T: AsRef<str>,
+        U: AsRef<str>,
+    {
+        let url = format!("{}/api/v0.2/{}", server_uri.as_ref(), endpoint.as_ref());
+        Ok(reqwest::get(&url).await?.json().await?)
+    }
+
+    #[tokio::test]
+    async fn test_devices() {
+        let mut p = SharedState::new();
+        {
+            let m = p.mutate();
+
+            let (worker, m) = Proxy::<Worker<_>>::builder().hostname("worker1").build(m);
+            let (device_type, m) = Proxy::<DeviceType<_>>::builder().name("type1").build(m);
+            let (_, m) = Proxy::<Device<_>>::builder()
+                .hostname("test1")
+                .worker_host(worker)
+                .device_type(device_type)
+                .description(Some("description of device".to_string()))
+                .health(Health::Good)
+                .build(m);
+
+            let (worker, m) = Proxy::<Worker<_>>::builder().hostname("worker2").build(m);
+            let (device_type, m) = Proxy::<DeviceType<_>>::builder().name("type2").build(m);
+            let _ = Proxy::<Device<state::State>>::builder()
+                .hostname("test2")
+                .worker_host(worker)
+                .device_type(device_type)
+                .description(Some("description of device".to_string()))
+                .health(Health::Bad)
+                .build(m);
+        }
+
+        let server = wiremock::MockServer::start().await;
+
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/api/v0.2/devices/"))
+            .respond_with(p.endpoint::<Device<state::State>>(Some(&server.uri()), None))
+            .mount(&server)
+            .await;
+
+        let devices = make_request(server.uri(), "devices/")
+            .await
+            .expect("failed to query devices");
+
+        assert_eq!(devices["results"][0]["hostname"], json!("test1"));
+        assert_eq!(devices["results"][1]["hostname"], json!("test2"));
+        assert_eq!(devices["results"].as_array().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_device_builder() {
+        let mut p = SharedState::new();
+        {
+            let m = p.mutate();
+            let (worker, m) = Proxy::<Worker<_>>::builder().hostname("worker1").build(m);
+            let (_, m) = Proxy::<Device<state::State>>::builder()
+                .hostname("test1")
+                .worker_host(worker)
+                .build(m);
+            let (worker, m) = Proxy::<Worker<_>>::builder().hostname("worker2").build(m);
+            let _ = Proxy::<Device<state::State>>::builder()
+                .hostname("test2")
+                .worker_host(worker)
+                .build(m);
+        }
+
+        let server = wiremock::MockServer::start().await;
+
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/api/v0.2/devices/"))
+            .respond_with(p.endpoint::<Device<state::State>>(Some(&server.uri()), None))
+            .mount(&server)
+            .await;
+
+        let devices = make_request(server.uri(), "devices/")
+            .await
+            .expect("failed to query devices");
+
+        assert_eq!(devices["results"][0]["hostname"], json!("test1"));
+        assert_eq!(devices["results"][1]["hostname"], json!("test2"));
+        assert_eq!(devices["results"].as_array().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_device_stream() {
+        let mut p = SharedState::new();
+        {
+            let m = p.mutate();
+            let devices = Proxy::<Device<_>>::generator().hostname(Repeat!("w1", "w2"));
+            let _ = GeneratorWithPersianRugIterator::new(devices, m)
+                .take(2)
+                .collect::<Vec<_>>();
+        }
+
+        let server = wiremock::MockServer::start().await;
+
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/api/v0.2/devices/"))
+            .respond_with(p.endpoint::<Device<state::State>>(Some(&server.uri()), None))
+            .mount(&server)
+            .await;
+
+        let devices = make_request(server.uri(), "devices/")
+            .await
+            .expect("failed to query devices");
+
+        assert_eq!(devices["results"][0]["hostname"], json!("w1"));
+        assert_eq!(devices["results"][1]["hostname"], json!("w2"));
+        assert_eq!(devices["results"].as_array().unwrap().len(), 2);
+    }
+
+    #[test(tokio::test)]
+    async fn test_output() {
+        let mut p = SharedState::new();
+        {
+            let m = p.mutate();
+            // let mut tag_gen = Proxy::<Tag<_>>::generator();
+
+            let gen = Proxy::<Device<_>>::generator()
+                .health(Repeat!(Health::Maintenance, Health::Good))
+                .description(|| None)
+                .device_version(|| None)
+                .physical_owner(|| None)
+                .physical_group(|| None)
+                .last_health_report_job(|| None); // GSome(Proxy::<Job<state::State>>::generator())
+                                                  //gen.tags(move || (&mut tag_gen).into_iter().take(2).collect::<Vec<_>>());
+
+            let _ = GeneratorWithPersianRugIterator::new(gen, m)
+                .take(4)
+                .collect::<Vec<_>>();
+        }
+
+        let server = wiremock::MockServer::start().await;
+        let ep = p.endpoint::<Device<_>>(Some(&server.uri()), Some(2));
+
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/api/v0.2/devices/"))
+            .respond_with(ep)
+            .mount(&server)
+            .await;
+
+        let body: serde_json::Value =
+            reqwest::get(&format!("{}/api/v0.2/devices/?limit=2", server.uri()))
+                .await
+                .expect("error getting devices")
+                .json()
+                .await
+                .expect("error parsing devices");
+
+        let next = format!("{}/api/v0.2/devices/?limit=2&offset=2", server.uri());
+
+        assert_eq!(
+            body,
+            serde_json::json! {
+                {
+                    "count": 4,
+                    "next": next,
+                    "previous": null,
+                    "results": [
+                        {
+                            "hostname": "test-device-0",
+                            "device_type": "test-device-type-0",
+                            "device_version": null,
+                            "physical_owner": null,
+                            "physical_group": null,
+                            "description": null,
+                            "tags": [
+                                0,
+                                1,
+                                2
+                            ],
+                            "state": "Idle",
+                            "health": "Maintenance",
+                            "last_health_report_job": null,
+                            "worker_host": "a-test-worker-1",
+                            "is_synced": false
+                        },
+                        {
+                            "hostname": "test-device-1",
+                            "device_type": "test-device-type-1",
+                            "device_version": null,
+                            "physical_owner": null,
+                            "physical_group": null,
+                            "description": null,
+                            "tags": [
+                                3,
+                                4,
+                                5
+                            ],
+                            "state": "Idle",
+                            "health": "Good",
+                            "last_health_report_job": null,
+                            "worker_host": "a-test-worker-2",
+                            "is_synced": false
+                        },
+                    ]
+                }
+            }
+        );
+    }
+}

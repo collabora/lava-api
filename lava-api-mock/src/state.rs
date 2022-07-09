@@ -406,3 +406,85 @@ impl State {
         s
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{JobState, SharedState};
+
+    use anyhow::Result;
+    use boulder::{BuildableWithPersianRug, BuilderWithPersianRug};
+    use persian_rug::Proxy;
+    use serde_json::{json, Value};
+
+    async fn make_request<T, U>(server_uri: T, endpoint: U) -> Result<Value>
+    where
+        T: AsRef<str>,
+        U: AsRef<str>,
+    {
+        let url = format!("{}/api/v0.2/{}", server_uri.as_ref(), endpoint.as_ref());
+        Ok(reqwest::get(&url).await?.json().await?)
+    }
+
+    #[tokio::test]
+    async fn test_state() {
+        let mut p = SharedState::new();
+        {
+            let m = p.mutate();
+            let (_, m) = Proxy::<Job<State>>::builder().id(100).build(m);
+            let (_, _m) = Proxy::<Job<State>>::builder().id(101).build(m);
+        }
+
+        let server = wiremock::MockServer::start().await;
+
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/api/v0.2/jobs/"))
+            .respond_with(p.endpoint::<Job<State>>(Some(&server.uri()), None))
+            .mount(&server)
+            .await;
+
+        let jobs = make_request(server.uri(), "jobs/")
+            .await
+            .expect("failed to query jobs");
+
+        assert_eq!(jobs["results"][0]["id"], json!(100));
+        assert_eq!(jobs["results"][1]["id"], json!(101));
+        assert_eq!(jobs["results"].as_array().unwrap().len(), 2);
+
+        {
+            let m = p.mutate();
+            let (_, _m) = Proxy::<Job<State>>::builder()
+                .id(102)
+                .state(JobState::Submitted)
+                .build(m);
+        }
+
+        let jobs = make_request(server.uri(), "jobs/")
+            .await
+            .expect("failed to query jobs");
+
+        assert_eq!(jobs["results"][0]["id"], json!(100));
+        assert_eq!(jobs["results"][1]["id"], json!(101));
+        assert_eq!(jobs["results"][2]["id"], json!(102));
+        assert_eq!(jobs["results"].as_array().unwrap().len(), 3);
+
+        {
+            let mut m = p.mutate();
+            for j in m.get_iter_mut::<Job<State>>() {
+                if j.id == 102 {
+                    j.state = JobState::Finished
+                }
+            }
+        }
+
+        let jobs = make_request(server.uri(), "jobs/")
+            .await
+            .expect("failed to query jobs");
+
+        assert_eq!(jobs["results"][0]["id"], json!(100));
+        assert_eq!(jobs["results"][1]["id"], json!(101));
+        assert_eq!(jobs["results"][2]["id"], json!(102));
+        assert_eq!(jobs["results"][2]["state"], json!("Finished"));
+        assert_eq!(jobs["results"].as_array().unwrap().len(), 3);
+    }
+}

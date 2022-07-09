@@ -196,3 +196,102 @@ pub enum HealthDenominator {
 
 impl django_query::filtering::ops::Scalar for HealthDenominator {}
 impl django_query::row::StringCellValue for HealthDenominator {}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use crate::state::{SharedState, State};
+
+    use boulder::{GeneratorWithPersianRugIterator, Repeat};
+    use test_log::test;
+
+    #[test(tokio::test)]
+    async fn test_output() {
+        let mut p = SharedState::new();
+        {
+            let m = p.mutate();
+
+            let gen = Proxy::<DeviceType<State>>::generator()
+                .architecture(|| None)
+                .processor(|| None)
+                .cpu_model(Repeat::new([None, Some("".to_string())]))
+                .aliases(|| Vec::new())
+                .bits(|| None)
+                .cores(|| Vec::new())
+                .core_count(|| None)
+                .description(Repeat::new([None, Some("".to_string())]))
+                .health_frequency(|| 10);
+
+            let _ = GeneratorWithPersianRugIterator::new(gen, m)
+                .take(5)
+                .collect::<Vec<_>>();
+        }
+
+        let server = wiremock::MockServer::start().await;
+
+        let ep = p.endpoint::<DeviceType<_>>(Some(&server.uri()), None);
+
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/api/v0.2/devicetypes/"))
+            .respond_with(ep)
+            .mount(&server)
+            .await;
+
+        let body: serde_json::Value = reqwest::get(&format!(
+            "{}/api/v0.2/devicetypes/?limit=2&offset=2",
+            server.uri()
+        ))
+        .await
+        .expect("error getting device types")
+        .json()
+        .await
+        .expect("error parsing device types");
+
+        let next = format!("{}/api/v0.2/devicetypes/?limit=2&offset=4", server.uri());
+        let prev = format!("{}/api/v0.2/devicetypes/?limit=2", server.uri());
+
+        assert_eq!(
+            body,
+            serde_json::json! {
+                {
+                    "count": 5,
+                    "next": next,
+                    "previous": prev,
+                    "results": [
+                        {
+                            "name": "test-device-type-2",
+                            "architecture": null,
+                            "processor": null,
+                            "cpu_model": null,
+                            "aliases": [],
+                            "bits": null,
+                            "cores": [],
+                            "core_count": null,
+                            "description": null,
+                            "health_frequency": 10,
+                            "disable_health_check": false,
+                            "health_denominator": "hours",
+                            "display": true
+                        },
+                        {
+                            "name": "test-device-type-3",
+                            "architecture": null,
+                            "processor": null,
+                            "cpu_model": "",
+                            "aliases": [],
+                            "bits": null,
+                            "cores": [],
+                            "core_count": null,
+                            "description": "",
+                            "health_frequency": 10,
+                            "disable_health_check": false,
+                            "health_denominator": "hours",
+                            "display": true
+                        }
+                    ]
+                }
+            }
+        );
+    }
+}

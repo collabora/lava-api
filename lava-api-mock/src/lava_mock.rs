@@ -123,3 +123,90 @@ impl LavaMock {
         self.state.mutate()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use crate::{devicetypes::DeviceType, Device, Job, JobState};
+
+    use anyhow::Result;
+    use boulder::{
+        BuildableWithPersianRug, BuilderWithPersianRug, GeneratableWithPersianRug,
+        TryRepeatFromPersianRug,
+    };
+    use boulder::{GeneratorToGeneratorWithPersianRugWrapper, GeneratorWithPersianRugMutIterator};
+    use chrono::Utc;
+    use persian_rug::Proxy;
+    use rand::{Rng, SeedableRng};
+    use serde_json::Value;
+
+    async fn make_request<T, U>(server_uri: T, endpoint: U) -> Result<Value>
+    where
+        T: AsRef<str>,
+        U: AsRef<str>,
+    {
+        let url = format!("{}/api/v0.2/{}", server_uri.as_ref(), endpoint.as_ref());
+        Ok(reqwest::get(&url).await?.json().await?)
+    }
+
+    #[tokio::test]
+    async fn test() {
+        let mut s = SharedState::new();
+
+        let mut rng = rand::rngs::StdRng::seed_from_u64(0xdeadbeef);
+        let device_types = ["device-type-1", "device-type-2"]
+            .into_iter()
+            .map(|name| {
+                Proxy::<DeviceType<State>>::builder()
+                    .name(name)
+                    .build(s.mutate())
+                    .0
+            })
+            .collect::<Vec<_>>();
+
+        let types = device_types.clone();
+        let mut devices = Proxy::<Device<State>>::generator().device_type(
+            GeneratorToGeneratorWithPersianRugWrapper::new(move || {
+                types[rng.gen_range(0..types.len())]
+            }),
+        );
+
+        let _ = GeneratorWithPersianRugMutIterator::new(&mut devices, s.mutate())
+            .take(90)
+            .collect::<Vec<_>>();
+
+        let mut rng = rand::rngs::StdRng::seed_from_u64(0xdeadbeef);
+
+        let types = device_types.clone();
+        let mut jobs = Proxy::<Job<State>>::generator()
+            .actual_device(TryRepeatFromPersianRug::new())
+            .state(GeneratorToGeneratorWithPersianRugWrapper::new(|| {
+                JobState::Submitted
+            }))
+            .submit_time(GeneratorToGeneratorWithPersianRugWrapper::new(|| {
+                Some(Utc::now())
+            }))
+            .requested_device_type(GeneratorToGeneratorWithPersianRugWrapper::new(move || {
+                Some(types[rng.gen_range(0..types.len())])
+            }));
+
+        let _ = GeneratorWithPersianRugMutIterator::new(&mut jobs, s.mutate())
+            .take(500)
+            .collect::<Vec<_>>();
+
+        let mock = LavaMock::new(s, Default::default()).await;
+
+        let devices = make_request(mock.uri(), "devices/")
+            .await
+            .expect("failed to query devices");
+
+        assert_eq!(devices["results"].as_array().unwrap().len(), 90);
+
+        let jobs = make_request(mock.uri(), "jobs/")
+            .await
+            .expect("failed to query jobs");
+
+        assert_eq!(jobs["results"].as_array().unwrap().len(), 500);
+    }
+}

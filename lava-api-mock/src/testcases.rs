@@ -350,3 +350,190 @@ impl Generator for MetadataGenerator {
         serde_yaml::to_string(&self.0.generate()).unwrap()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{SharedState, State};
+
+    use boulder::GeneratorWithPersianRugIterator;
+    use boulder::{BuilderWithPersianRug, GeneratableWithPersianRug};
+    use django_query::row::{CellValue, IntoRowWithContext, Serializer};
+    use persian_rug::Proxy;
+    use serde_json::Number;
+    use test_log::test;
+
+    #[test]
+    fn test_builder() {
+        let mut p = SharedState::new();
+        let tc = {
+            let m = p.mutate();
+
+            let (tc, _) = TestCase::builder().build(m);
+            tc
+        };
+        let map = TestCase::get_serializer(p.access()).to_row(&tc);
+        assert_eq!(map["id"], CellValue::Number(Number::from(0)));
+        assert_eq!(
+            map["name"],
+            CellValue::String("An example test case".to_string())
+        );
+        assert_eq!(map["unit"], CellValue::String("seconds".to_string()));
+        assert_eq!(map["result"], CellValue::String("pass".to_string()));
+        assert_eq!(map["measurement"], CellValue::Null);
+        // assert_eq!(map["metadata"], CellValue::String(""));
+        assert_eq!(map["suite"], CellValue::Number(Number::from(0)));
+        assert_eq!(map["start_log_line"], CellValue::Null);
+        assert_eq!(map["end_log_line"], CellValue::Null);
+        assert_eq!(map["test_set"], CellValue::Number(Number::from(0)));
+    }
+
+    #[test]
+    fn test_generator() {
+        let mut p = SharedState::new();
+        let gen = TestCase::<State>::generator();
+
+        let tcs = GeneratorWithPersianRugIterator::new(gen, p.mutate())
+            .take(5)
+            .collect::<Vec<_>>();
+
+        let ser = TestCase::get_serializer(p.access());
+        for (i, tc) in tcs.iter().enumerate() {
+            let map = ser.to_row(&tc);
+            let units = ["seconds".to_string(), "hours".to_string()];
+            assert_eq!(map["id"], CellValue::Number(Number::from(i)));
+            assert_eq!(map["name"], CellValue::String(format!("Test case {}", i)));
+            assert_eq!(map["unit"], CellValue::String(units[i % 2].clone()));
+            assert_eq!(map["result"], CellValue::String("pass".to_string()));
+            assert_eq!(map["measurement"], CellValue::Null);
+            // assert_eq!(map["metadata"], CellValue::String(""));
+            assert_eq!(map["suite"], CellValue::Number(Number::from(i)));
+            assert_eq!(map["start_log_line"], CellValue::Null);
+            assert_eq!(map["end_log_line"], CellValue::Null);
+            assert_eq!(map["test_set"], CellValue::Number(Number::from(i)));
+        }
+    }
+
+    #[test]
+    fn test_metadata_output() {
+        let mut mgen = MetadataGenerator(
+            Metadata::generator()
+                .case(Pattern!("example-case-{}", Inc(0)))
+                .definition(Pattern!("example-definition-{}", Inc(0)))
+                .result(|| PassFail::Pass)
+                .level(Repeat!(None, Some("1.1.1".to_string())))
+                .extra(Repeat!(None, Some("example-extra-data".to_string())))
+                .namespace(Repeat!(None, Some("example-namespace".to_string())))
+                .duration(Repeat!(None, Some(Decimal(dec!(0.10)))))
+                .error_msg(|| None)
+                .error_type(|| None),
+        );
+
+        let cases = vec![
+            "case: example-case-0\ndefinition: example-definition-0\nresult: pass\n",
+            "case: example-case-1\ndefinition: example-definition-1\nduration: '0.10'\nextra: example-extra-data\nlevel: 1.1.1\nnamespace: example-namespace\nresult: pass\n",
+        ];
+
+        for case in cases {
+            let control: serde_yaml::Value =
+                serde_yaml::from_str(case).expect("failed to parse control input");
+            let test: serde_yaml::Value =
+                serde_yaml::from_str(&mgen.generate()).expect("failed to generate test data");
+            assert_eq!(test, control);
+        }
+    }
+
+    #[test(tokio::test)]
+    async fn test_output() {
+        let mut p = SharedState::new();
+        {
+            let m = p.mutate();
+
+            let gen = Proxy::<TestCase<State>>::generator()
+                .name(Pattern!("example-case-{}", Inc(0)))
+                .unit(Repeat!("", "seconds"))
+                .result(|| PassFail::Pass)
+                .measurement(Repeat!(None, Some(Decimal(dec!(0.1000000000)))))
+            // We hard code this here because serde_yaml isn't configurable enough to match the surface form
+            // We check the metadata generator separately
+                .metadata(GSome(Repeat!(
+                    "case: example-case-0\ndefinition: example-definition-0\nresult: pass\n",
+                    "case: example-case-1\ndefinition: example-definition-1\nduration: '0.10'\nextra: example-extra-data\nlevel: 1.1.1\nnamespace: example-namespace\nresult: pass\n"
+                )))
+                .logged(Time::new(
+                    DateTime::parse_from_rfc3339("2022-04-11T16:00:00-00:00")
+                        .unwrap()
+                        .with_timezone(&Utc),
+                    Duration::minutes(30),
+                ))
+                .suite(Proxy::<TestSuite<State>>::generator())
+                .test_set(|| None)
+                .resource_uri(Pattern!("example-resource-uri-{}", Inc(0)));
+
+            let _ = GeneratorWithPersianRugIterator::new(gen, m)
+                .take(4)
+                .collect::<Vec<_>>();
+        }
+
+        let server = wiremock::MockServer::start().await;
+
+        let ep = p.endpoint::<TestCase<State>>(Some(&server.uri()), None);
+
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/api/v0.2/jobs/0/tests/"))
+            .respond_with(ep)
+            .mount(&server)
+            .await;
+
+        let body: serde_json::Value =
+            reqwest::get(&format!("{}/api/v0.2/jobs/0/tests/?limit=2", server.uri()))
+                .await
+                .expect("error getting tests")
+                .json()
+                .await
+                .expect("error parsing tests");
+
+        let next = format!("{}/api/v0.2/jobs/0/tests/?limit=2&offset=2", server.uri());
+
+        assert_eq!(
+            body,
+            serde_json::json! {
+                {
+                    "count": 4,
+                    "next": next,
+                    "previous": null,
+                    "results": [
+                        {
+                            "id": 0,
+                            "result": "pass",
+                            "resource_uri": "example-resource-uri-0",
+                            "unit": "",
+                            "name": "example-case-0",
+                            "measurement": null,
+                            "metadata": "case: example-case-0\ndefinition: example-definition-0\nresult: pass\n",
+                            "start_log_line": null,
+                            "end_log_line": null,
+                            "logged": "2022-04-11T16:00:00.000000Z",
+                            "suite": 0,
+                            "test_set": null
+                        },
+                        {
+                            "id": 1,
+                            "result": "pass",
+                            "resource_uri": "example-resource-uri-1",
+                            "unit": "seconds",
+                            "name": "example-case-1",
+                            "measurement": "0.1000000000",
+                            "metadata": "case: example-case-1\ndefinition: example-definition-1\nduration: '0.10'\nextra: example-extra-data\nlevel: 1.1.1\nnamespace: example-namespace\nresult: pass\n",
+                            "start_log_line": null,
+                            "end_log_line": null,
+                            "logged": "2022-04-11T16:30:00.000000Z",
+                            "suite": 1,
+                            "test_set": null
+                        }
+                    ]
+                }
+            }
+        );
+    }
+}

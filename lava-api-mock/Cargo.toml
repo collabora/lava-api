@@ -27,3 +27,10 @@ wiremock = { version = "0.5" }
 rand = { version = "0.8" }
 arc-swap = "1.4"
 rand_chacha = "0.3"
+
+[dev-dependencies]
+anyhow = "1"
+env_logger = "0.9"
+test-log = "0.2"
+reqwest = "0.11"
+tokio-test = "0.4"

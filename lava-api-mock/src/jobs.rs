@@ -148,3 +148,295 @@ pub enum State {
 
 impl django_query::filtering::ops::Scalar for State {}
 impl django_query::row::StringCellValue for State {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use anyhow::Result;
+    use boulder::Repeat;
+    use boulder::{
+        BuildableWithPersianRug, BuilderWithPersianRug, GeneratorWithPersianRugIterator,
+    };
+    use serde_json::{json, Value};
+    use test_log::test;
+
+    async fn make_request<T, U>(server_uri: T, endpoint: U) -> Result<Value>
+    where
+        T: AsRef<str>,
+        U: AsRef<str>,
+    {
+        let url = format!("{}/api/v0.2/{}", server_uri.as_ref(), endpoint.as_ref());
+        Ok(reqwest::get(&url).await?.json().await?)
+    }
+
+    #[tokio::test]
+    async fn test_jobs() {
+        let mut p = crate::state::SharedState::new();
+        {
+            let m = p.mutate();
+
+            let (submitter, m) = Proxy::<User<_>>::builder().username("fred").build(m);
+            let (device_type, mut m) = Proxy::<DeviceType<_>>::builder().name("big one").build(m);
+            m.add(Job {
+                id: 1,
+                submitter,
+                viewing_groups: Vec::new(),
+                description: "A job submitted by Fred".to_string(),
+                health_check: false,
+                requested_device_type: Some(device_type),
+                tags: Vec::new(),
+                actual_device: None,
+                submit_time: Some(Utc::now()),
+                start_time: None,
+                end_time: None,
+                state: State::Scheduled,
+                health: Health::Unknown,
+                priority: 1,
+                definition: "/bin/some_stuff".to_string(),
+                original_definition: "/usr/bin/other_stuff".to_string(),
+                multinode_definition: String::new(),
+                failure_tags: Vec::new(),
+                failure_comment: None,
+            });
+
+            let (submitter, m) = Proxy::<User<_>>::builder().username("jane").build(m);
+            let (device_type, mut m) = Proxy::<DeviceType<_>>::builder().name("anything").build(m);
+            m.add(Job {
+                id: 2,
+                submitter,
+                viewing_groups: Vec::new(),
+                description: "A job submitted by Jane".to_string(),
+                health_check: false,
+                requested_device_type: Some(device_type),
+                tags: Vec::new(),
+                actual_device: None,
+                submit_time: Some(Utc::now()),
+                start_time: None,
+                end_time: None,
+                state: State::Submitted,
+                health: Health::Incomplete,
+                priority: 1,
+                definition: "/bin/some_stuff".to_string(),
+                original_definition: "/usr/bin/other_stuff".to_string(),
+                multinode_definition: String::new(),
+                failure_tags: Vec::new(),
+                failure_comment: None,
+            });
+        }
+
+        let server = wiremock::MockServer::start().await;
+
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/api/v0.2/jobs/"))
+            .respond_with(p.endpoint::<Job<_>>(Some(&server.uri()), None))
+            .mount(&server)
+            .await;
+
+        let jobs = make_request(server.uri(), "jobs/")
+            .await
+            .expect("failed to query jobs");
+
+        assert_eq!(jobs["results"][0]["id"], json!(1));
+        assert_eq!(jobs["results"][1]["id"], json!(2));
+        assert_eq!(jobs["results"].as_array().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_job_builder() {
+        let mut p = crate::state::SharedState::new();
+        {
+            let m = p.mutate();
+
+            let (submitter, m) = Proxy::<User<_>>::builder().username("fred").build(m);
+            let (device_type, m) = Proxy::<DeviceType<_>>::builder().name("big one").build(m);
+            let (job, mut m) = Job::builder()
+                .id(1)
+                .submitter(submitter)
+                .requested_device_type(device_type)
+                .state(State::Scheduled)
+                .start_time(None)
+                .build(m);
+            m.add(job);
+
+            let (submitter, m) = Proxy::<User<_>>::builder().username("jane").build(m);
+            let (device_type, m) = Proxy::<DeviceType<_>>::builder().name("anything").build(m);
+            let (job, mut m) = Job::builder()
+                .id(2)
+                .submitter(submitter)
+                .requested_device_type(device_type)
+                .state(State::Submitted)
+                .start_time(None)
+                .build(m);
+            m.add(job);
+        }
+
+        let server = wiremock::MockServer::start().await;
+
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/api/v0.2/jobs/"))
+            .respond_with(p.endpoint::<Job<_>>(Some(&server.uri()), None))
+            .mount(&server)
+            .await;
+
+        let jobs = make_request(server.uri(), "jobs/")
+            .await
+            .expect("failed to query jobs");
+
+        assert_eq!(jobs["results"][0]["id"], json!(1));
+        assert_eq!(jobs["results"][1]["id"], json!(2));
+        assert_eq!(jobs["results"].as_array().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_job_stream() {
+        let mut p = crate::state::SharedState::new();
+        {
+            let m = p.mutate();
+            let (user1, m) = Proxy::<User<_>>::builder().username("fred").build(m);
+            let (user2, m) = Proxy::<User<_>>::builder().username("jane").build(m);
+            let _ = GeneratorWithPersianRugIterator::new(
+                Proxy::<Job<crate::state::State>>::generator().submitter(Repeat!(user1, user2)),
+                m,
+            )
+            .take(2)
+            .collect::<Vec<_>>();
+        }
+
+        let server = wiremock::MockServer::start().await;
+
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/api/v0.2/jobs/"))
+            .respond_with(p.endpoint::<Job<_>>(Some(&server.uri()), None))
+            .mount(&server)
+            .await;
+
+        let jobs = make_request(server.uri(), "jobs/")
+            .await
+            .expect("failed to query jobs");
+
+        assert_eq!(jobs["results"][0]["id"], json!(0));
+        assert_eq!(jobs["results"][1]["id"], json!(1));
+        assert_eq!(jobs["results"].as_array().unwrap().len(), 2);
+    }
+
+    #[test(tokio::test)]
+    async fn test_output() {
+        let mut p = crate::state::SharedState::new();
+        {
+            let m = p.mutate();
+
+            let gen = Proxy::<Job<crate::state::State>>::generator()
+                .state(|| State::Finished)
+                .health(|| Health::Complete)
+                .submit_time(GSome(Time::new(
+                    DateTime::parse_from_rfc3339("2022-04-11T05:00:00-00:00")
+                        .unwrap()
+                        .with_timezone(&Utc),
+                    Duration::minutes(5),
+                )))
+                .start_time(GSome(Time::new(
+                    DateTime::parse_from_rfc3339("2022-04-11T05:30:00-00:00")
+                        .unwrap()
+                        .with_timezone(&Utc),
+                    Duration::minutes(5),
+                )))
+                .end_time(GSome(Time::new(
+                    DateTime::parse_from_rfc3339("2022-04-11T06:00:00-00:00")
+                        .unwrap()
+                        .with_timezone(&Utc),
+                    Duration::minutes(5),
+                )))
+                .tags(|| Vec::new())
+                .viewing_groups(|| Vec::new())
+                .multinode_definition(|| String::new())
+                .health_check(Repeat!(false, true))
+                .priority(Repeat!(0, 50));
+
+            let _ = GeneratorWithPersianRugIterator::new(gen, m)
+                .take(4)
+                .collect::<Vec<_>>();
+        }
+
+        let server = wiremock::MockServer::start().await;
+
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/api/v0.2/jobs/"))
+            .respond_with(p.endpoint::<Job<_>>(Some(&server.uri()), None))
+            .mount(&server)
+            .await;
+
+        let body = make_request(server.uri(), "jobs/?limit=2")
+            .await
+            .expect("failed to query jobs");
+
+        let next = format!("{}/api/v0.2/jobs/?limit=2&offset=2", server.uri());
+
+        assert_eq!(
+            body,
+            serde_json::json! {
+                {
+                    "count": 4,
+                    "next": next,
+                    "previous": null,
+                    "results": [
+                        {
+                            "id": 0,
+                            "submitter": "test-user-1",
+                            "viewing_groups": [
+
+                            ],
+                            "description": "Example job description",
+                            "health_check": false,
+                            "requested_device_type": "test-device-type-0",
+                            "tags": [
+
+                            ],
+                            "actual_device": "test-device-0",
+                            "submit_time": "2022-04-11T05:00:00.000000Z",
+                            "start_time": "2022-04-11T05:30:00.000000Z",
+                            "end_time": "2022-04-11T06:00:00.000000Z",
+                            "state": "Finished",
+                            "health": "Complete",
+                            "priority": 0,
+                            "definition": "Example job definition",
+                            "original_definition": "Example job original definition",
+                            "multinode_definition": "",
+                            "failure_tags": [
+
+                            ],
+                            "failure_comment": null
+                        },
+                        {
+                            "id": 1,
+                            "submitter": "test-user-2",
+                            "viewing_groups": [
+
+                            ],
+                            "description": "Example job description",
+                            "health_check": true,
+                            "requested_device_type": "test-device-type-1",
+                            "tags": [
+
+                            ],
+                            "actual_device": "test-device-1",
+                            "submit_time": "2022-04-11T05:05:00.000000Z",
+                            "start_time": "2022-04-11T05:35:00.000000Z",
+                            "end_time": "2022-04-11T06:05:00.000000Z",
+                            "state": "Finished",
+                            "health": "Complete",
+                            "priority": 50,
+                            "definition": "Example job definition",
+                            "original_definition": "Example job original definition",
+                            "multinode_definition": "",
+                            "failure_tags": [
+
+                            ],
+                            "failure_comment": null
+                        },
+                    ]
+                }
+            }
+        );
+    }
+}
