@@ -14,6 +14,10 @@ use django_query::mock::{EndpointWithContext, NestedEndpointParams, NestedEndpoi
 use persian_rug::{Context, Mutator, Proxy};
 use std::sync::Arc;
 
+/// The data backing a mock Lava instance
+///
+/// This is a [`persian_rug::Context`] containing all of the different
+/// data types that make up the database of a Lava instance.
 #[derive(Clone, Debug, Default)]
 #[persian_rug::persian_rug]
 pub struct State {
@@ -49,17 +53,73 @@ pub struct State {
     workers: Worker<State>,
 }
 
+/// A thin wrapper around [`State`] for shared access.
+///
+/// Although a [`State`] can hold all the necessary data, it doesn't
+/// define a strategy for sharing that data so it can be
+/// updated. Owing to limitations in the underlying crates this crate
+/// is based on, there's only really one sensible way to do this at
+/// present, and that's to use a [`CloneReplace`] to hold the data.
+///
+/// This is just a lightweight wrapper with some convenient methods to
+/// allow you to create [`wiremock`] endpoints.  Those are in turn
+/// based on [`EndpointWithContext`] from [`django_query`]
+/// (specifically this is the `WithContext` variant, because the
+/// connections between the different data types are handled using
+/// [`persian-rug`](persian_rug), and in fact a [`State`] is just a
+/// [`persian_rug::Context`].
 pub struct SharedState(CloneReplace<State>);
 
 impl SharedState {
+    /// Create and wrap a new empty [`State`].
+    ///
+    /// Example:
+    /// ```rust
+    /// use lava_api_mock::SharedState;
+    ///
+    /// let p = SharedState::new();
+    /// ```
     pub fn new() -> Self {
         Self(CloneReplace::new(State::new()))
     }
 
+    /// Create, populate and wrap a [`State`].
+    ///
+    /// `pop` is a [`PopulationParams`] instance giving a count for
+    /// each type of object.
+    ///
+    /// Example:
+    /// ```rust
+    /// use lava_api_mock::SharedState;
+    ///
+    /// let p = SharedState::new_populated(Default::default());
+    /// ```
     pub fn new_populated(pop: PopulationParams) -> Self {
         Self(CloneReplace::new(State::new_populated(pop)))
     }
 
+    /// Create a new [`EndpointWithContext`] for type `T` within the
+    /// enclosed [`State`].
+    ///
+    /// The return value is an implementor of [`wiremock::Respond`] and can
+    /// be mounted directly onto a wiremock server instance.
+    ///
+    /// Example:
+    /// ```rust
+    /// use lava_api_mock::{Job, State, SharedState};
+    ///
+    /// # tokio_test::block_on( async {
+    /// let p = SharedState::new();
+    ///
+    /// let server = wiremock::MockServer::start().await;
+    ///
+    /// wiremock::Mock::given(wiremock::matchers::method("GET"))
+    ///     .and(wiremock::matchers::path("/api/v0.2/jobs/"))
+    ///     .respond_with(p.endpoint::<Job<State>>(Some(&server.uri()), None))
+    ///     .mount(&server)
+    ///     .await;
+    /// # });
+    /// ```
     pub fn endpoint<T>(
         &self,
         uri: Option<&str>,
@@ -87,6 +147,44 @@ impl SharedState {
         ep
     }
 
+    /// Create a new [`NestedEndpointWithContext`] for type `T` within the
+    /// enclosed [`State`].
+    ///
+    /// Nested endpoints objects data that can only be queried by
+    /// providing some related object, like finding [`TestCase`]
+    /// instances that match a given [`Job`] for example: here `tests`
+    /// is nested under `jobs`. See the documentation for
+    /// [`NestedEndpointWithContext`] for more details.
+    ///
+    /// The return value is an implementor of [`wiremock::Respond`] and can
+    /// be mounted directly onto a wiremock server instance.
+    ///
+    /// Example:
+    /// ```rust
+    /// use django_query::mock::{nested_endpoint_matches, NestedEndpointParams};
+    /// use lava_api_mock::{Job, State, SharedState, TestCase};
+    ///
+    /// let p = SharedState::new();
+    ///
+    /// # tokio_test::block_on( async {
+    /// let server = wiremock::MockServer::start().await;
+    ///
+    /// wiremock::Mock::given(wiremock::matchers::method("GET"))
+    ///     .and(nested_endpoint_matches("/api/v0.2", "jobs", "tests"))
+    ///     .respond_with(p.nested_endpoint::<TestCase<State>>(
+    ///         NestedEndpointParams {
+    ///             root: "/api/v0.2",
+    ///             parent: "jobs",
+    ///             child: "tests",
+    ///             parent_query: "suite__job__id",
+    ///             base_uri: Some(&server.uri()),
+    ///         },
+    ///         Some(10),
+    ///     ))
+    ///     .mount(&server)
+    ///     .await;
+    /// # });
+    /// ```
     pub fn nested_endpoint<T>(
         &self,
         params: NestedEndpointParams<'_>,
@@ -114,10 +212,39 @@ impl SharedState {
         ep
     }
 
+    /// Obtain a [`persian_rug::Accessor`] for the enclosed [`State`]
+    ///
+    /// This permits reading the data contained in the [`State`].
+    ///
+    /// Example:
+    /// ```rust
+    /// use lava_api_mock::{Job, SharedState};
+    /// use persian_rug::Accessor;
+    ///
+    /// let p = SharedState::new_populated(Default::default());
+    ///
+    /// for job in p.access().get_proxy_iter::<Job<_>>() {
+    ///     println!("Got job {:?}", p.access().get(&job));
+    /// }
+    /// ```
     pub fn access(&self) -> Arc<State> {
         self.0.access()
     }
 
+    /// Obtain a [`persian_rug::Mutator`] for the enclosed [`State`]
+    ///
+    /// This permits modifying the data contained in the [`State`].
+    ///
+    /// Example:
+    /// ```rust
+    /// use boulder::{BuildableWithPersianRug, BuilderWithPersianRug};
+    /// use lava_api_mock::{Job, SharedState, State};
+    /// use persian_rug::Proxy;
+    ///
+    /// let mut p = SharedState::new_populated(Default::default());
+    ///
+    /// let _ = Proxy::<Job<State>>::builder().build(p.mutate());
+    /// ```
     pub fn mutate(&mut self) -> MutateGuard<State> {
         self.0.mutate()
     }
@@ -135,6 +262,33 @@ impl Default for SharedState {
     }
 }
 
+/// Initial population sizes for the data in a [`State`]
+///
+/// This specifies the number of objects of each type to
+/// generate when initializing a [`State`] instance using
+/// [`new_populated`](State::new_populated). It is
+/// [`Buildable`] so you can customise just some fields
+/// from default if you.
+///
+/// The default values are:
+/// - 10 [`Alias`] instances
+/// - 5 [`Architecture`] instances
+/// - 2 [`BitWidth`] instances
+/// - 3 [`Core`] instances
+/// - 50 [`Device`] instances
+/// - 10 [`DeviceType`] instances
+/// - 3 [`Group`] instances
+/// - 200 [`Job`] instances
+/// - 3 [`ProcessorFamily`] instances
+/// - 5 [`Tag`] instances
+/// - 5 [`User`] instances
+/// - 10 [`Worker`] instances
+///
+/// It also asks for:
+/// - 5 [`TestCase`] instances
+/// - 2 [`TestSet`] instances
+/// - 3 [`TestSuite`] instances
+/// to be created for each job that is created.
 #[derive(Buildable, Clone, Debug, Eq, PartialEq)]
 pub struct PopulationParams {
     #[boulder(default = 10usize)]
@@ -170,6 +324,17 @@ pub struct PopulationParams {
 }
 
 impl PopulationParams {
+    /// Create a new default [`PopulationParams`]
+    ///
+    /// This is equivalent to using the [`Builder`] without
+    /// customising it.
+    ///
+    /// ```rust
+    /// use boulder::{Buildable, Builder};
+    /// use lava_api_mock::PopulationParams;
+    ///
+    /// assert_eq!(PopulationParams::new(), PopulationParams::builder().build());
+    /// ```
     pub fn new() -> Self {
         Default::default()
     }
@@ -277,10 +442,18 @@ impl GeneratorWithPersianRug<State> for SetGenerator {
 }
 
 impl State {
+    /// Create a new empty [`State`]
     pub fn new() -> Self {
         Default::default()
     }
 
+    /// A [`DeviceType`] [`GeneratorWithPersianRug`] that uses
+    /// dependencies already in the [`State`].
+    ///
+    /// This generator is equivalent to the default, except that it
+    /// draws [`Alias`], [`Architecture`], [`BitWidth`], [`Core`] and
+    /// [`ProcessorFamily`] instances from those already in the
+    /// containing [`State`] at the point of generation.
     pub fn make_device_type_generator(
     ) -> impl GeneratorWithPersianRug<State, Output = Proxy<DeviceType<State>>> {
         Proxy::<DeviceType<State>>::generator()
@@ -291,11 +464,24 @@ impl State {
             .processor(TryRepeatFromPersianRug::new())
     }
 
+    /// A [`User`] [`GeneratorWithPersianRug`] that uses
+    /// dependencies already in the [`State`].
+    ///
+    /// This generator is equivalent to the default, except that it
+    /// draws [`Group`] instances from those already in the containing
+    /// [`State`] at the point of generation.
     pub fn make_user_generator() -> impl GeneratorWithPersianRug<State, Output = Proxy<User<State>>>
     {
         Proxy::<User<State>>::generator().group(TryRepeatFromPersianRug::new())
     }
 
+    /// A [`Device`] [`GeneratorWithPersianRug`] that uses
+    /// dependencies already in the [`State`].
+    ///
+    /// This generator is equivalent to the default, except that it
+    /// draws [`DeviceType`], [`User`], [`Group`],
+    /// [`Tag`] and [`Worker`] instances from those already in
+    /// the containing [`State`] at the point of generation.
     pub fn make_device_generator(
     ) -> impl GeneratorWithPersianRug<State, Output = Proxy<Device<State>>> {
         Proxy::<Device<State>>::generator()
@@ -306,6 +492,13 @@ impl State {
             .worker_host(RepeatFromPersianRug::new())
     }
 
+    /// A [`Job`] [`GeneratorWithPersianRug`] that uses
+    /// dependencies already in the [`State`].
+    ///
+    /// This generator is equivalent to the default, except that it
+    /// draws [`User`], [`Group`], [`DeviceType`], [`Tag`] and
+    /// [`Device`] instances from those already in the
+    /// containing [`State`] at the point of generation.
     pub fn make_job_generator() -> impl GeneratorWithPersianRug<State, Output = Proxy<Job<State>>> {
         Proxy::<Job<State>>::generator()
             .submitter(RepeatFromPersianRug::new())
@@ -315,6 +508,26 @@ impl State {
             .actual_device(TryRepeatFromPersianRug::new())
     }
 
+    /// Create a new [`State`] with some initial data.
+    ///
+    /// Here, `pop` is a [`PopulationParams`] which gives the initial
+    /// number of each type of object. The object generators are
+    /// customised to draw their references from the other objects in
+    /// the state.
+    ///
+    /// You can obtain new instances of themodified generators from
+    /// [`make_device_generator`](State::make_device_generator),
+    /// [`make_device_type_generator`](State::make_device_type_generator),
+    /// [`make_job_generator`](State::make_job_generator) and
+    /// [`make_user_generator`](State::make_user_generator) if you
+    /// need to create more objects in a similar fashion.
+    ///
+    /// Note that because tests are per-job objects, the counts in
+    /// [`PopulationParams`] for [`TestCase`], [`TestSet`] and
+    /// [`TestSuite`] are used to make custom objects for each job.
+    /// The tests are not provided automatically when jobs are generated
+    /// by the underlying [`GeneratorWithPersianRug`] provided by
+    /// [`make_job_generator`](State::make_job_generator).
     pub fn new_populated(pop: PopulationParams) -> Self {
         let mut s: State = Default::default();
 

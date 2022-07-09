@@ -8,6 +8,7 @@ use django_query::{row::IntoRowWithPersianRug, sorting::SortableWithPersianRug};
 
 use persian_rug::{contextual, Context};
 
+/// A worker in the LAVA API
 #[derive(
     Clone,
     Debug,
@@ -49,6 +50,7 @@ pub struct Worker<C: Context + 'static> {
     pub master_version_notified: Option<String>,
 }
 
+/// The health (i.e. status) of a [`Worker`] in the LAVA API
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Display, EnumString)]
 pub enum Health {
     Active,
@@ -59,6 +61,7 @@ pub enum Health {
 impl Scalar for Health {}
 impl django_query::row::StringCellValue for Health {}
 
+/// The (power) state of a [`Worker`] in the LAVA API
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Display, EnumString)]
 pub enum State {
     Online,

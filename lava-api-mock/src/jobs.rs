@@ -14,6 +14,7 @@ use crate::tags::Tag;
 use crate::users::{Group, User};
 use crate::workers::Worker;
 
+/// A job from the LAVA API
 // Filters from lava/lava_rest_app/filters.py
 // FIXME: the model contains
 // - is_public
@@ -125,6 +126,7 @@ pub struct Job<C: Context + 'static> {
     pub failure_comment: Option<String>,
 }
 
+/// The health (i.e. completion type) of a [`Job`] in the LAVA API
 #[derive(Copy, Clone, Debug, PartialEq, Eq, EnumString, Display)]
 pub enum Health {
     Unknown,
@@ -136,6 +138,7 @@ pub enum Health {
 impl django_query::filtering::ops::Scalar for Health {}
 impl django_query::row::StringCellValue for Health {}
 
+/// The state (i.e. progress) of a [`Job`] in the LAVA API
 #[derive(Copy, Clone, Debug, PartialEq, Eq, EnumString, Display)]
 pub enum State {
     Submitted,

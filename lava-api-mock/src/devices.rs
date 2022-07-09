@@ -11,6 +11,7 @@ use crate::{
     Alias, Architecture, BitWidth, Core, DeviceType, Group, Job, ProcessorFamily, Tag, User, Worker,
 };
 
+/// A device from the LAVA API.
 #[derive(
     Clone,
     Debug,
@@ -105,6 +106,7 @@ pub struct Device<C: Context + 'static> {
     pub last_health_report_job: Option<Proxy<Job<C>>>,
 }
 
+/// The health status of a [`Device`] from the LAVA API.
 #[derive(Clone, Debug, PartialEq, Eq, EnumString, PartialOrd, Ord, Display)]
 pub enum Health {
     Unknown,
@@ -118,6 +120,7 @@ pub enum Health {
 impl django_query::filtering::ops::Scalar for Health {}
 impl django_query::row::StringCellValue for Health {}
 
+/// The state of a [`Device`] from the LAVA API.
 #[derive(Clone, Debug, PartialEq, Eq, EnumString, PartialOrd, Ord, Display)]
 pub enum State {
     Idle,

@@ -8,6 +8,7 @@ use django_query::{
 };
 use persian_rug::{contextual, Context, Proxy};
 
+/// An alias from the LAVA API
 #[derive(
     Clone,
     Debug,
@@ -28,6 +29,7 @@ pub struct Alias<C: Context + 'static> {
     pub name: String,
 }
 
+/// An architecture from the LAVA API
 // FIXME: we implement IntoRowWithPersianRug to get AsForeignKey derived for us
 #[derive(
     Clone,
@@ -48,6 +50,7 @@ pub struct Architecture<C: Context + 'static> {
     pub name: String,
 }
 
+/// A bit width from the LAVA API
 // FIXME: we implement IntoRowWithPersianRug to get AsForeignKey derived for us
 #[derive(
     Clone,
@@ -68,6 +71,7 @@ pub struct BitWidth<C: Context + 'static> {
     pub width: u64,
 }
 
+/// A core from the LAVA API
 // FIXME: we implement IntoRowWithPersianRug to get AsForeignKey derived for us
 #[derive(
     Clone,
@@ -88,6 +92,7 @@ pub struct Core<C: Context + 'static> {
     pub name: String,
 }
 
+/// A processor family from the LAVA API
 // FIXME: we implement IntoRowWithPersianRug to get AsForeignKey derived for us
 #[derive(
     Clone,
@@ -108,6 +113,7 @@ pub struct ProcessorFamily<C: Context + 'static> {
     pub name: String,
 }
 
+/// A device type from the LAVA API
 // FIXME: Verify: the docs say this is not sortable
 // FIXME: Only implementing sortable so that we can do a nested sort on the name key
 #[derive(
@@ -187,6 +193,8 @@ pub struct DeviceType<C: Context + 'static> {
     pub display: bool,
 }
 
+/// The units for the [`health_frequency`](Device::health_frequency)
+/// field in [`Device`] from the LAVA API
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Display, EnumString)]
 #[strum(serialize_all = "snake_case")]
 pub enum HealthDenominator {

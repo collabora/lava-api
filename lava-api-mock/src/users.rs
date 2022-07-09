@@ -6,6 +6,7 @@ use django_query::{
 };
 use persian_rug::{contextual, Context, Proxy};
 
+/// A user in the LAVA API
 // FIXME: Deriving sort and IntoRowWithPersianRug needlessly
 #[derive(
     Clone,
@@ -36,6 +37,7 @@ pub struct User<C: Context + 'static> {
     pub email: Option<String>,
 }
 
+/// A group in the LAVA API
 // FIXME: Deriving sort and IntoRowWithPersianRug needlessly
 #[derive(
     Clone,

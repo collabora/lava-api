@@ -24,6 +24,7 @@ use crate::workers::Worker;
 
 use persian_rug::{contextual, Context, Proxy};
 
+/// A representation of the metadata for a test case.
 #[derive(Clone, Debug, Serialize, Buildable, Generatable)]
 pub struct Metadata {
     #[boulder(default = "lava")]
@@ -54,6 +55,7 @@ pub struct Metadata {
     pub error_type: Option<String>,
 }
 
+/// A suite of tests from the LAVA API.
 #[derive(
     Clone,
     Debug,
@@ -118,6 +120,7 @@ pub struct TestSuite<C: Context + 'static> {
     pub resource_uri: Option<String>,
 }
 
+/// A set of tests from the LAVA API.
 #[derive(
     Clone,
     Debug,
@@ -182,6 +185,7 @@ pub struct TestSet<C: Context + 'static> {
     pub suite: Proxy<TestSuite<C>>,
 }
 
+/// A test from the LAVA API.
 #[derive(
     Clone,
     Debug,
@@ -277,6 +281,7 @@ pub struct TestCase<C: Context + 'static> {
     pub resource_uri: String,
 }
 
+/// A test result from the LAVA API
 #[derive(
     Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumString, Display, SerializeDisplay,
 )]
@@ -336,9 +341,16 @@ impl From<Decimal> for rust_decimal::Decimal {
 impl django_query::filtering::ops::Scalar for Decimal {}
 impl django_query::row::StringCellValue for Decimal {}
 
+/// YAML encoded [`Metadata`] objects.
 pub struct MetadataGenerator(<Metadata as Generatable>::Generator);
 
 impl MetadataGenerator {
+    /// Create a new generator
+    ///
+    /// Note that this generator can only contain a default
+    /// [`Metadata`] generator at present. It's convenient only when
+    /// you aren't particularly interested in the actual data, you
+    /// just need something parseable.
     pub fn new() -> Self {
         Self(Metadata::generator())
     }

@@ -7,6 +7,7 @@ use django_query::{
 
 use persian_rug::{contextual, Context};
 
+/// A tag in the LAVA API
 #[derive(
     Debug,
     Clone,
