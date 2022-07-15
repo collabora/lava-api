@@ -105,6 +105,7 @@ impl<'a> JobLogRaw<'a> {
         let mut url = self.lava.base.clone();
         url.path_segments_mut()
             .unwrap()
+            .pop_if_empty()
             .push("jobs")
             .push(&self.id.to_string())
             .push("logs")
