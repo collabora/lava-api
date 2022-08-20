@@ -46,7 +46,7 @@
 pub mod device;
 pub mod job;
 pub mod joblog;
-mod paginator;
+pub mod paginator;
 mod queryset;
 pub mod tag;
 pub mod test;
