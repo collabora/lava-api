@@ -192,6 +192,10 @@ impl Lava {
         job::submit_job(self, definition).await
     }
 
+    pub async fn cancel_job(&self, id: i64) -> Result<(), job::CancellationError> {
+        job::cancel_job(self, id).await
+    }
+
     /// Obtain a [`Stream`](futures::stream::Stream) of all the
     /// [`Worker`] instances on the server.
     pub fn workers(&self) -> Paginator<Worker> {

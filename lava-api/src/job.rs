@@ -512,6 +512,32 @@ pub async fn submit_job(lava: &Lava, definition: &str) -> Result<Vec<i64>, Submi
     }
 }
 
+#[derive(Error, Debug)]
+pub enum CancellationError {
+    #[error("Request failed {0}")]
+    Request(#[from] reqwest::Error),
+    #[error("Unexpected reply: {0}")]
+    UnexpectedReply(reqwest::StatusCode),
+}
+
+pub async fn cancel_job(lava: &Lava, id: i64) -> Result<(), CancellationError> {
+    let mut url = lava.base.clone();
+    url.path_segments_mut()
+        .unwrap()
+        .pop_if_empty()
+        .push("jobs")
+        .push(&id.to_string())
+        .push("cancel")
+        .push("");
+
+    let res = lava.client.get(url).send().await?;
+
+    match res.status() {
+        StatusCode::OK => Ok(()),
+        s => Err(CancellationError::UnexpectedReply(s)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Health, Job, Ordering, State, Tag};
