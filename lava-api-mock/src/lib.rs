@@ -69,6 +69,7 @@
 mod devices;
 mod devicetypes;
 mod jobs;
+mod mock;
 mod server;
 mod state;
 mod tags;
@@ -80,6 +81,7 @@ pub use devices::{Device, Health as DeviceHealth, State as DeviceState};
 pub use devicetypes::{Alias, Architecture, BitWidth, Core, DeviceType, ProcessorFamily};
 pub use jobs::Job;
 pub use jobs::{Health as JobHealth, State as JobState};
+pub use mock::{create_mock, Mock as LavaMock};
 pub use server::{PaginationLimits, Server};
 pub use state::{PopulationParams, SharedState, State};
 pub use tags::Tag;
