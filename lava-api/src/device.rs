@@ -5,6 +5,7 @@ use futures::FutureExt;
 use futures::{stream, stream::Stream, stream::StreamExt};
 use serde::Deserialize;
 use serde_with::DeserializeFromStr;
+use std::convert::{Infallible, TryFrom, TryInto};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use strum::{Display, EnumString};
@@ -132,59 +133,57 @@ impl<'a> Stream for Devices<'a> {
     }
 }
 
+impl TryFrom<lava_api_mock::DeviceHealth> for Health {
+    type Error = Infallible;
+    fn try_from(dev: lava_api_mock::DeviceHealth) -> Result<Health, Self::Error> {
+        use Health::*;
+        match dev {
+            lava_api_mock::DeviceHealth::Unknown => Ok(Unknown),
+            lava_api_mock::DeviceHealth::Maintenance => Ok(Maintenance),
+            lava_api_mock::DeviceHealth::Good => Ok(Good),
+            lava_api_mock::DeviceHealth::Bad => Ok(Bad),
+            lava_api_mock::DeviceHealth::Looping => Ok(Looping),
+            lava_api_mock::DeviceHealth::Retired => Ok(Retired),
+        }
+    }
+}
+
+impl Device {
+    #[persian_rug::constraints(context = C, access(lava_api_mock::Tag<C>, lava_api_mock::DeviceType<C>, lava_api_mock::Worker<C>))]
+    pub fn from_mock<'b, B, C>(dev: &lava_api_mock::Device<C>, context: B) -> Device
+    where
+        B: 'b + persian_rug::Accessor<Context = C>,
+        C: persian_rug::Context + 'static,
+    {
+        Self {
+            hostname: dev.hostname.clone(),
+            worker_host: context.get(&dev.worker_host).hostname.clone(),
+            device_type: context.get(&dev.device_type).name.clone(),
+            description: dev.description.clone(),
+            health: dev.health.clone().try_into().unwrap(),
+            tags: dev
+                .tags
+                .iter()
+                .map(|t| Tag::from_mock(context.get(t), context.clone()))
+                .collect::<Vec<_>>(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Device, Health, Tag};
     use crate::Lava;
 
     use boulder::{Buildable, Builder};
+    use chrono::Utc;
     use futures::TryStreamExt;
     use lava_api_mock::{
-        Device as MockDevice, DeviceHealth as MockDeviceHealth, DeviceType as MockDeviceType,
-        PaginationLimits, PopulationParams, Server, SharedState, State, Tag as MockTag,
-        Worker as MockWorker,
+        create_mock, PaginationLimits, PopulationParams, Server, SharedState, State,
     };
-    use persian_rug::{Accessor, Context};
-    use std::collections::BTreeMap;
-    use std::convert::{Infallible, TryFrom, TryInto};
+    use persian_rug::Accessor;
+    use std::collections::{BTreeMap, BTreeSet};
+    use std::iter::FromIterator;
     use test_log::test;
-
-    impl TryFrom<MockDeviceHealth> for Health {
-        type Error = Infallible;
-        fn try_from(dev: MockDeviceHealth) -> Result<Health, Self::Error> {
-            use Health::*;
-            match dev {
-                MockDeviceHealth::Unknown => Ok(Unknown),
-                MockDeviceHealth::Maintenance => Ok(Maintenance),
-                MockDeviceHealth::Good => Ok(Good),
-                MockDeviceHealth::Bad => Ok(Bad),
-                MockDeviceHealth::Looping => Ok(Looping),
-                MockDeviceHealth::Retired => Ok(Retired),
-            }
-        }
-    }
-
-    impl Device {
-        #[persian_rug::constraints(context = C, access(MockTag<C>, MockDeviceType<C>, MockWorker<C>))]
-        pub fn from_mock<'b, B, C>(dev: &MockDevice<C>, context: B) -> Device
-        where
-            B: 'b + Accessor<Context = C>,
-            C: Context + 'static,
-        {
-            Self {
-                hostname: dev.hostname.clone(),
-                worker_host: context.get(&dev.worker_host).hostname.clone(),
-                device_type: context.get(&dev.device_type).name.clone(),
-                description: dev.description.clone(),
-                health: dev.health.clone().try_into().unwrap(),
-                tags: dev
-                    .tags
-                    .iter()
-                    .map(|t| Tag::from_mock(context.get(t), context.clone()))
-                    .collect::<Vec<_>>(),
-            }
-        }
-    }
 
     /// Stream 50 devices with a page limit of 5 from the server
     /// checking that we correctly reconstruct their tags and that
@@ -202,6 +201,7 @@ mod tests {
 
         let mut map = BTreeMap::new();
         let start = state.access();
+
         for device in start.get_iter::<lava_api_mock::Device<State>>() {
             map.insert(device.hostname.clone(), device);
         }
@@ -232,6 +232,47 @@ mod tests {
             }
 
             seen.insert(device.hostname.clone(), device.clone());
+        }
+        assert_eq!(seen.len(), 50);
+    }
+
+    #[test(tokio::test)]
+    async fn test_basic_mock() {
+        let (mut p, _clock) = create_mock(Utc::now()).await;
+
+        let devices = BTreeSet::from_iter(p.generate_devices(50).into_iter());
+
+        let lava = Lava::new(&p.uri(), None).expect("failed to make lava server");
+
+        let mut ld = lava.devices();
+
+        let mut seen = BTreeSet::new();
+        while let Some(device) = ld.try_next().await.expect("failed to get device") {
+            assert!(!seen.contains(&device.hostname));
+            assert!(devices.contains(&device.hostname));
+
+            p.with_device(&device.hostname, |dev| {
+                assert_eq!(device.hostname, dev.hostname);
+                p.with_proxy(&dev.worker_host, |h| {
+                    assert_eq!(device.worker_host, h.hostname);
+                });
+                p.with_proxy(&dev.device_type, |dt| {
+                    assert_eq!(device.device_type, dt.name);
+                });
+                assert_eq!(device.description, dev.description);
+                assert_eq!(device.health.to_string(), dev.health.to_string());
+
+                assert_eq!(device.tags.len(), dev.tags.len());
+                for i in 0..device.tags.len() {
+                    p.with_proxy(&dev.tags[i], |t| {
+                        assert_eq!(device.tags[i].id, t.id);
+                        assert_eq!(device.tags[i].name, t.name);
+                        assert_eq!(device.tags[i].description, t.description);
+                    });
+                }
+            });
+
+            seen.insert(device.hostname.clone());
         }
         assert_eq!(seen.len(), 50);
     }
