@@ -20,7 +20,7 @@ mod tests {
 
     use boulder::{Buildable, Builder};
     use lava_api_mock::{
-        LavaMock, PaginationLimits, PopulationParams, SharedState, State, Tag as MockTag,
+        PaginationLimits, PopulationParams, Server, SharedState, State, Tag as MockTag,
     };
     use persian_rug::{Accessor, Context};
     use std::collections::BTreeMap;
@@ -44,7 +44,7 @@ mod tests {
     #[test(tokio::test)]
     async fn test_basic() {
         let state = SharedState::new_populated(PopulationParams::builder().tags(49usize).build());
-        let server = LavaMock::new(
+        let server = Server::new(
             state.clone(),
             PaginationLimits::builder().workers(Some(5)).build(),
         )

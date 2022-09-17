@@ -145,7 +145,7 @@ mod tests {
     use crate::Lava;
     use boulder::{Buildable, Builder};
     use futures::TryStreamExt;
-    use lava_api_mock::{Job, LavaMock, PaginationLimits, PopulationParams, SharedState, State};
+    use lava_api_mock::{Job, PaginationLimits, PopulationParams, Server, SharedState, State};
     use persian_rug::Accessor;
     use std::collections::BTreeMap;
     use test_log::test;
@@ -252,7 +252,7 @@ result: fail
             .test_cases(20usize)
             .build();
         let state = SharedState::new_populated(pop);
-        let server = LavaMock::new(
+        let server = Server::new(
             state.clone(),
             PaginationLimits::builder().test_cases(Some(6)).build(),
         )

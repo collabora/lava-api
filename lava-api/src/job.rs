@@ -174,13 +174,13 @@ impl<'a> Jobs<'a> {
 /// Example:
 /// ```rust
 /// use futures::stream::TryStreamExt;
-/// # use lava_api_mock::{LavaMock, PaginationLimits, PopulationParams, SharedState};
+/// # use lava_api_mock::{Server, PaginationLimits, PopulationParams, SharedState};
 /// use lava_api::{Lava, job::State, job::Ordering};
 /// #
 /// # tokio_test::block_on( async {
 /// # let limits = PaginationLimits::new();
 /// # let population = PopulationParams::new();
-/// # let mock = LavaMock::new(SharedState::new_populated(population), limits).await;
+/// # let mock = Server::new(SharedState::new_populated(population), limits).await;
 /// # let service_uri = mock.uri();
 /// # let lava_token = None;
 ///
@@ -551,8 +551,8 @@ mod tests {
     use futures::TryStreamExt;
     use lava_api_mock::{
         Device as MockDevice, DeviceType as MockDeviceType, Group as MockGroup, Job as MockJob,
-        JobHealth as MockJobHealth, JobState as MockJobState, LavaMock, PaginationLimits,
-        PopulationParams, SharedState, Tag as MockTag, User as MockUser,
+        JobHealth as MockJobHealth, JobState as MockJobState, PaginationLimits, PopulationParams,
+        Server, SharedState, Tag as MockTag, User as MockUser,
     };
     use persian_rug::{Accessor, Context, Proxy};
     use std::collections::BTreeMap;
@@ -692,7 +692,7 @@ mod tests {
     #[test(tokio::test)]
     async fn test_basic() {
         let state = SharedState::new_populated(PopulationParams::builder().jobs(50usize).build());
-        let server = LavaMock::new(
+        let server = Server::new(
             state.clone(),
             PaginationLimits::builder().jobs(Some(7)).build(),
         )
@@ -765,7 +765,7 @@ mod tests {
     /// properly)
     #[test(tokio::test)]
     async fn test_jobs_builder() {
-        let mut server = lava_api_mock::LavaMock::new(
+        let mut server = lava_api_mock::Server::new(
             SharedState::new_populated(
                 PopulationParams::builder()
                     .tags(5usize)

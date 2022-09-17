@@ -32,7 +32,7 @@ mod tests {
     use crate::Lava;
     use boulder::{Buildable, Builder};
     use futures::TryStreamExt;
-    use lava_api_mock::{LavaMock, PaginationLimits, PopulationParams, SharedState, State, Worker};
+    use lava_api_mock::{PaginationLimits, PopulationParams, Server, SharedState, State, Worker};
     use persian_rug::Accessor;
     use std::collections::BTreeMap;
     use test_log::test;
@@ -42,7 +42,7 @@ mod tests {
     async fn test_basic() {
         let state =
             SharedState::new_populated(PopulationParams::builder().workers(51usize).build());
-        let server = LavaMock::new(
+        let server = Server::new(
             state.clone(),
             PaginationLimits::builder().workers(Some(2)).build(),
         )

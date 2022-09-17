@@ -141,7 +141,7 @@ mod tests {
     use futures::TryStreamExt;
     use lava_api_mock::{
         Device as MockDevice, DeviceHealth as MockDeviceHealth, DeviceType as MockDeviceType,
-        LavaMock, PaginationLimits, PopulationParams, SharedState, State, Tag as MockTag,
+        PaginationLimits, PopulationParams, Server, SharedState, State, Tag as MockTag,
         Worker as MockWorker,
     };
     use persian_rug::{Accessor, Context};
@@ -194,7 +194,7 @@ mod tests {
     async fn test_basic() {
         let state =
             SharedState::new_populated(PopulationParams::builder().devices(50usize).build());
-        let server = LavaMock::new(
+        let server = Server::new(
             state.clone(),
             PaginationLimits::builder().devices(Some(5)).build(),
         )
