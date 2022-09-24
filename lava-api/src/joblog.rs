@@ -215,6 +215,7 @@ pub enum JobLogLevel {
     Target,
     Input,
     Feedback,
+    Exception,
 }
 
 #[derive(Debug, Clone, Deserialize)]
