@@ -45,6 +45,7 @@
 //! ```
 pub mod device;
 pub mod job;
+pub mod joblog;
 mod paginator;
 mod queryset;
 pub mod tag;
@@ -52,6 +53,7 @@ pub mod test;
 pub mod worker;
 
 use futures::stream::TryStreamExt;
+use joblog::JobLogBuilder;
 use log::debug;
 use reqwest::{header, redirect::Policy, Client};
 use std::collections::HashMap;
@@ -169,6 +171,10 @@ impl Lava {
     /// [`Device`](device::Device) instances on the server.
     pub fn devices(&self) -> Devices {
         Devices::new(self)
+    }
+
+    pub fn log(&self, id: i64) -> JobLogBuilder {
+        JobLogBuilder::new(self, id)
     }
 
     /// Obtain a customisable query object for [`Job`](job::Job)

@@ -8,11 +8,14 @@ use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
 use futures::stream::TryStreamExt;
+use futures::StreamExt;
 use lava_api::device;
 use lava_api::job;
+use lava_api::joblog::JobLogError;
 use lava_api::worker::{self, Worker};
 use lava_api::Lava;
 use structopt::StructOpt;
+use tokio::io::AsyncWriteExt;
 use tokio::time::sleep;
 
 fn device_health_to_emoji(health: device::Health) -> &'static str {
@@ -59,6 +62,16 @@ async fn devices(lava: &Lava) -> Result<()> {
     Ok(())
 }
 
+async fn log(lava: &Lava, opts: LogCmd) -> Result<()> {
+    println!("Job log:");
+    let mut log = lava.log(opts.job).log();
+
+    while let Some(entry) = log.try_next().await? {
+        println!("{:?}", entry);
+    }
+    Ok(())
+}
+
 async fn jobs(lava: &Lava, opts: JobsCmd) -> Result<()> {
     println!("\nQueued Jobs:");
     let mut jobs = lava
@@ -93,11 +106,28 @@ async fn submit(lava: &Lava, opts: SubmitCmd) -> Result<()> {
     if opts.follow {
         // TODO support following more then 1 job
         let builder = lava.jobs().id(id);
+        let mut offset = 0;
         loop {
             let mut jobs = builder.clone().query();
             match jobs.try_next().await {
                 Ok(Some(job)) => {
-                    println!("State: {}", job.state);
+                    //if job.state == job::State::Running {
+                    let mut log = lava.log(job.id).start(offset).log();
+                    while let Some(entry) = log.next().await {
+                        match entry {
+                            Ok(entry) => {
+                                println!("{:?}: {:?}", entry.dt, entry.msg);
+                                offset += 1;
+                            }
+                            Err(JobLogError::NoData) => (),
+                            Err(JobLogError::ParseError(s, e)) => {
+                                println!("Couldn't parse {} - {}", s.trim_end(), e);
+                                offset += 1;
+                            }
+                            Err(e) => return Err(e.into()),
+                        }
+                    }
+                    //}
                     if job.state == job::State::Finished {
                         break;
                     }
@@ -108,7 +138,7 @@ async fn submit(lava: &Lava, opts: SubmitCmd) -> Result<()> {
                 }
             }
 
-            sleep(Duration::from_secs(5)).await;
+            sleep(Duration::from_secs(10)).await;
         }
     }
     Ok(())
@@ -131,6 +161,13 @@ struct SubmitCmd {
 }
 
 #[derive(StructOpt, Debug)]
+struct LogCmd {
+    #[structopt(short, long)]
+    follow: bool,
+    job: i64,
+}
+
+#[derive(StructOpt, Debug)]
 struct JobsCmd {
     #[structopt(short, long, default_value = "10")]
     limit: u32,
@@ -140,6 +177,8 @@ struct JobsCmd {
 enum Command {
     /// List devices
     Devices,
+    /// Show a job log
+    Log(LogCmd),
     /// Submit a job
     Submit(SubmitCmd),
     /// List jobs
@@ -171,6 +210,7 @@ async fn main() -> Result<()> {
     match opts.command {
         Command::Devices => devices(&l).await?,
         Command::Submit(s) => submit(&l, s).await?,
+        Command::Log(opts) => log(&l, opts).await?,
         Command::Jobs(j) => jobs(&l, j).await?,
         Command::Workers => workers(&l).await?,
     }
