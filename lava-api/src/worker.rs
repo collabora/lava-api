@@ -5,7 +5,7 @@ use serde_with::DeserializeFromStr;
 use strum::{Display, EnumString};
 
 /// The current usage of a worker
-#[derive(Copy, Clone, Debug, DeserializeFromStr, Display, EnumString, PartialEq)]
+#[derive(Copy, Clone, Debug, DeserializeFromStr, Display, EnumString, PartialEq, Eq)]
 pub enum Health {
     Active,
     Maintenance,
@@ -13,7 +13,7 @@ pub enum Health {
 }
 
 /// The online status of a worker
-#[derive(Copy, Clone, Debug, DeserializeFromStr, Display, EnumString, PartialEq)]
+#[derive(Copy, Clone, Debug, DeserializeFromStr, Display, EnumString, PartialEq, Eq)]
 pub enum State {
     Online,
     Offline,
