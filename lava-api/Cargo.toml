@@ -2,8 +2,12 @@
 name = "lava-api"
 version = "0.1.0"
 authors = ["Sjoerd Simons <sjoerd@collabora.com>"]
-edition = "2018"
+edition = "2021"
 license = "MIT OR Apache-2.0"
+description = "Helper crate to work with the LAVA REST APIs"
+homepage = "https://github.com/collabora/lava-api"
+repository = "https://github.com/collabora/lava-api"
+readme = "../README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -12,7 +16,7 @@ chrono = { version = "0.4", features = ["serde"] }
 futures = "0.3"
 serde = { version = "^1.0.97", features = ["derive"] }
 serde_json = "^1"
-serde_with = "1.14"
+serde_with = "2.0"
 serde_yaml = "0.9"
 reqwest = { version = "0.11", features = ["json", "stream"] }
 tokio = { version = "1.4", features = ["macros", "rt", "rt-multi-thread", "sync"] }
@@ -25,7 +29,7 @@ bytes = "1.2.1"
 [dev-dependencies]
 anyhow = "1"
 structopt = "0.3"
-env_logger = "0.8"
+env_logger = "0.9"
 lava-api-mock = { path = "../lava-api-mock" }
 wiremock = "0.5"
 django-query = "0.2"

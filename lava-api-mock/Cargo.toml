@@ -4,6 +4,10 @@ version = "0.1.0"
 authors = ["Edmund Smith <ed.smith@collabora.com>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
+description = "Mock crate for the LAVA REST APIs"
+homepage = "https://github.com/collabora/lava-api"
+repository = "https://github.com/collabora/lava-api"
+readme = "../README.md"
 
 [dependencies]
 boulder = { version="0.3", features = ["persian-rug"] }
@@ -16,7 +20,7 @@ rust_decimal = "1"
 rust_decimal_macros = "1"
 serde = { version = "^1.0.97", features = ["derive"] }
 serde_json = "^1"
-serde_with = "1.14"
+serde_with = "2.0"
 serde_yaml = "0.9"
 tokio = { version = "1.4", features = ["macros", "rt", "rt-multi-thread", "sync"] }
 strum = { version = "0.24" }

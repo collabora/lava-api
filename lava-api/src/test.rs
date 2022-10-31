@@ -9,7 +9,7 @@ use strum::{Display, EnumString};
 
 /// The result of running a [`TestCase`], as stored by LAVA
 // From lava/lava_results_app/models.py in TestCase::RESULT_CHOICES
-#[derive(Copy, DeserializeFromStr, Clone, Debug, Display, EnumString, PartialEq)]
+#[derive(Copy, DeserializeFromStr, Clone, Debug, Display, EnumString, PartialEq, Eq)]
 #[strum(serialize_all = "snake_case")]
 pub enum PassFail {
     Pass,
@@ -20,7 +20,7 @@ pub enum PassFail {
 
 /// The type of an error that occurred running a test
 // From lava/lava_common/exceptions.py as the error_type fields of the classes
-#[derive(Copy, DeserializeFromStr, Clone, Debug, Display, EnumString, PartialEq)]
+#[derive(Copy, DeserializeFromStr, Clone, Debug, Display, EnumString, PartialEq, Eq)]
 pub enum ErrorType {
     None,
     Infrastructure,
