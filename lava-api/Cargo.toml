@@ -2,7 +2,7 @@
 name = "lava-api"
 version = "0.1.0"
 authors = ["Sjoerd Simons <sjoerd@collabora.com>"]
-edition = "2018"
+edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Helper crate to work with the LAVA REST APIs"
 homepage = "https://github.com/collabora/lava-api"
