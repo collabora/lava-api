@@ -4,6 +4,10 @@ version = "0.1.0"
 authors = ["Edmund Smith <ed.smith@collabora.com>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
+description = "Mock crate for the LAVA REST APIs"
+homepage = "https://github.com/collabora/lava-api"
+repository = "https://github.com/collabora/lava-api"
+readme = "../README.md"
 
 [dependencies]
 boulder = { version="0.3", features = ["persian-rug"] }
