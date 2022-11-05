@@ -1,5 +1,6 @@
 //! Retrieve jobs
 
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use futures::stream::{self, Stream, StreamExt};
@@ -536,6 +537,48 @@ pub async fn cancel_job(lava: &Lava, id: i64) -> Result<(), CancellationError> {
         StatusCode::OK => Ok(()),
         s => Err(CancellationError::UnexpectedReply(s)),
     }
+}
+
+#[derive(Error, Debug)]
+pub enum ResultsError {
+    #[error("Request failed {0}")]
+    Request(#[from] reqwest::Error),
+    #[error("Unexpected reply: {0}")]
+    UnexpectedReply(reqwest::StatusCode),
+}
+
+pub fn job_results_as_junit(
+    lava: &Lava,
+    id: i64,
+) -> impl Stream<Item = Result<Bytes, ResultsError>> + Send + Unpin + '_ {
+    let mut url = lava.base.clone();
+    url.path_segments_mut()
+        .unwrap()
+        .pop_if_empty()
+        .push("jobs")
+        .push(&id.to_string())
+        .push("junit")
+        .push("");
+
+    Box::pin(
+        async move {
+            let b: Pin<Box<dyn Stream<Item = Result<Bytes, ResultsError>> + Send>> =
+                match lava.client.get(url).send().await {
+                    Ok(res) => match res.status() {
+                        StatusCode::OK => Box::pin(
+                            res.bytes_stream()
+                                .map(|item| item.map_err(ResultsError::from)),
+                        ),
+                        s => Box::pin(stream::once(async move {
+                            Err(ResultsError::UnexpectedReply(s))
+                        })),
+                    },
+                    Err(e) => Box::pin(stream::once(async move { Err(e.into()) })),
+                };
+            b
+        }
+        .flatten_stream(),
+    )
 }
 
 #[cfg(test)]
