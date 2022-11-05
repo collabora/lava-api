@@ -1,9 +1,10 @@
 //! Retrieve jobs
 
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use futures::stream::{self, Stream, StreamExt};
-use futures::FutureExt;
+use futures::{FutureExt, TryStreamExt};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_with::DeserializeFromStr;
@@ -535,6 +536,34 @@ pub async fn cancel_job(lava: &Lava, id: i64) -> Result<(), CancellationError> {
     match res.status() {
         StatusCode::OK => Ok(()),
         s => Err(CancellationError::UnexpectedReply(s)),
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum ResultsError {
+    #[error("Request failed {0}")]
+    Request(#[from] reqwest::Error),
+    #[error("Unexpected reply: {0}")]
+    UnexpectedReply(reqwest::StatusCode),
+}
+
+pub async fn job_results_as_junit(
+    lava: &Lava,
+    id: i64,
+) -> Result<impl Stream<Item = Result<Bytes, ResultsError>> + Send + Unpin + '_, ResultsError> {
+    let mut url = lava.base.clone();
+    url.path_segments_mut()
+        .unwrap()
+        .pop_if_empty()
+        .push("jobs")
+        .push(&id.to_string())
+        .push("junit")
+        .push("");
+
+    let res = lava.client.get(url).send().await?;
+    match res.status() {
+        StatusCode::OK => Ok(res.bytes_stream().map_err(ResultsError::from)),
+        s => Err(ResultsError::UnexpectedReply(s)),
     }
 }
 

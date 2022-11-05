@@ -52,7 +52,8 @@ pub mod tag;
 pub mod test;
 pub mod worker;
 
-use futures::stream::TryStreamExt;
+use bytes::Bytes;
+use futures::stream::{Stream, TryStreamExt};
 use joblog::JobLogBuilder;
 use log::debug;
 use reqwest::{header, redirect::Policy, Client};
@@ -194,6 +195,13 @@ impl Lava {
 
     pub async fn cancel_job(&self, id: i64) -> Result<(), job::CancellationError> {
         job::cancel_job(self, id).await
+    }
+
+    pub async fn job_results_as_junit(
+        &self,
+        id: i64,
+    ) -> Result<impl Stream<Item = Result<Bytes, job::ResultsError>> + '_, job::ResultsError> {
+        job::job_results_as_junit(self, id).await
     }
 
     /// Obtain a [`Stream`](futures::stream::Stream) of all the
