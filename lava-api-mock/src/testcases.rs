@@ -411,7 +411,7 @@ mod tests {
 
         let ser = TestCase::get_serializer(p.access());
         for (i, tc) in tcs.iter().enumerate() {
-            let map = ser.to_row(&tc);
+            let map = ser.to_row(tc);
             let units = ["seconds".to_string(), "hours".to_string()];
             assert_eq!(map["id"], CellValue::Number(Number::from(i)));
             assert_eq!(map["name"], CellValue::String(format!("Test case {}", i)));

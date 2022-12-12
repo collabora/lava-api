@@ -287,10 +287,7 @@ result: fail
                 assert_eq!(job.id, start.get(&start.get(&tt.suite).job).id);
                 assert_eq!(test.start_log_line, tt.start_log_line);
                 assert_eq!(test.end_log_line, tt.end_log_line);
-                assert_eq!(
-                    test.test_set,
-                    tt.test_set.as_ref().map(|t| start.get(&t).id)
-                );
+                assert_eq!(test.test_set, tt.test_set.as_ref().map(|t| start.get(t).id));
                 assert_eq!(test.logged, tt.logged);
                 assert_eq!(test.resource_uri, tt.resource_uri);
 

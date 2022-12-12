@@ -350,9 +350,9 @@ mod tests {
                         .with_timezone(&Utc),
                     Duration::minutes(5),
                 )))
-                .tags(|| Vec::new())
-                .viewing_groups(|| Vec::new())
-                .multinode_definition(|| String::new())
+                .tags(Vec::new)
+                .viewing_groups(Vec::new)
+                .multinode_definition(String::new)
                 .health_check(Repeat!(false, true))
                 .priority(Repeat!(0, 50));
 
