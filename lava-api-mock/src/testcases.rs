@@ -11,8 +11,8 @@ use django_query::{
     sorting::SortableWithPersianRug,
 };
 use rust_decimal_macros::dec;
-use serde::Serialize;
-use serde_with::SerializeDisplay;
+use serde::{Deserialize, Serialize};
+use serde_with::{DeserializeFromStr, SerializeDisplay};
 use strum::{Display, EnumString};
 
 use crate::devices::Device;
@@ -25,7 +25,7 @@ use crate::workers::Worker;
 use persian_rug::{contextual, Context, Proxy};
 
 /// A representation of the metadata for a test case.
-#[derive(Clone, Debug, Serialize, Buildable, Generatable)]
+#[derive(Clone, Debug, Deserialize, Serialize, Buildable, Generatable)]
 pub struct Metadata {
     #[boulder(default = "lava")]
     pub definition: String,
@@ -283,7 +283,17 @@ pub struct TestCase<C: Context + 'static> {
 
 /// A test result from the LAVA API
 #[derive(
-    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, EnumString, Display, SerializeDisplay,
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumString,
+    Display,
+    SerializeDisplay,
+    DeserializeFromStr,
 )]
 #[strum(serialize_all = "snake_case")]
 pub enum PassFail {
@@ -297,8 +307,8 @@ impl django_query::filtering::ops::Scalar for PassFail {}
 impl django_query::row::StringCellValue for PassFail {}
 
 #[doc(hidden)]
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Serialize)]
-pub struct Decimal(rust_decimal::Decimal);
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
+pub struct Decimal(pub rust_decimal::Decimal);
 
 impl Deref for Decimal {
     type Target = rust_decimal::Decimal;
