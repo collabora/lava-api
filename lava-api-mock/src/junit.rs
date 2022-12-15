@@ -94,3 +94,84 @@ impl Respond for JunitEndpoint {
 pub fn junit_endpoint(data: SharedState) -> JunitEndpoint {
     JunitEndpoint { data }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use boulder::{
+        GeneratableWithPersianRug, GeneratorWithPersianRug, GeneratorWithPersianRugIterator,
+    };
+    use boulder::{Inc, Pattern, Repeat, Some as GSome, Time};
+    use chrono::{DateTime, Duration, Utc};
+    use persian_rug::Proxy;
+    use rust_decimal_macros::dec;
+    use test_log::test;
+
+    use crate::testcases::Decimal;
+    use crate::{TestCase, TestSuite};
+
+    #[test(tokio::test)]
+    async fn test_read() {
+        let mut p = SharedState::new();
+        {
+            let m = p.mutate();
+
+            let (suite, m) = Proxy::<TestSuite<State>>::generator().generate(m);
+
+            let gen = Proxy::<TestCase<State>>::generator()
+                .name(Pattern!("example-case-{}", Inc(0)))
+                .unit(Repeat!("", "seconds"))
+                .result(|| PassFail::Pass)
+                .measurement(Repeat!(None, Some(Decimal(dec!(0.1000000000)))))
+            // We hard code this here because serde_yaml isn't configurable enough to match the surface form
+            // We check the metadata generator separately
+                .metadata(GSome(Repeat!(
+                    "case: example-case-0\ndefinition: example-definition-0\nresult: pass\n",
+                    "case: example-case-1\ndefinition: example-definition-1\nduration: '0.10'\nextra: example-extra-data\nlevel: 1.1.1\nnamespace: example-namespace\nresult: pass\n"
+                )))
+                .logged(Time::new(
+                    DateTime::parse_from_rfc3339("2022-04-11T16:00:00-00:00")
+                        .unwrap()
+                        .with_timezone(&Utc),
+                    Duration::minutes(30),
+                ))
+                .suite(move || suite)
+                .test_set(|| None)
+                .resource_uri(Pattern!("example-resource-uri-{}", Inc(0)));
+
+            let _ = GeneratorWithPersianRugIterator::new(gen, m)
+                .take(4)
+                .collect::<Vec<_>>();
+        }
+
+        let server = wiremock::MockServer::start().await;
+
+        let ep = junit_endpoint(p);
+
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/api/v0.2/jobs/0/junit/"))
+            .respond_with(ep)
+            .mount(&server)
+            .await;
+
+        let body = reqwest::get(&format!("{}/api/v0.2/jobs/0/junit/", server.uri()))
+            .await
+            .expect("error getting junit")
+            .bytes()
+            .await
+            .expect("error parsing utf-8 for junit");
+
+        let suites =
+            junit_parser::from_reader(std::io::Cursor::new(body)).expect("failed to parse junit");
+        assert_eq!(suites.suites.len(), 1);
+        for suite in suites.suites.iter() {
+            assert_eq!(suite.cases.len(), 4);
+            for (i, case) in suite.cases.iter().enumerate() {
+                assert!(case.status.is_success());
+                assert_eq!(case.time, if i % 2 == 0 { 0.0f64 } else { 0.1f64 });
+                assert_eq!(case.name, format!("example-case-{}", i))
+            }
+        }
+    }
+}
