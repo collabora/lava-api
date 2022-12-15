@@ -31,6 +31,8 @@ wiremock = { version = "0.5" }
 rand = { version = "0.8" }
 arc-swap = "1.4"
 rand_chacha = "0.3"
+junit-report = "0.8.1"
+regex = "1.7.0"
 
 [dev-dependencies]
 anyhow = "1"

@@ -1,3 +1,4 @@
+use crate::junit_endpoint;
 use crate::state::{SharedState, State};
 use crate::{Alias, Device, DeviceType, Job, Tag, TestCase, TestSuite, Worker};
 
@@ -111,6 +112,12 @@ impl LavaMock {
                 },
                 limits.test_suites,
             ))
+            .mount(&s)
+            .await;
+
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(nested_endpoint_matches("/api/v0.2", "jobs", "junit"))
+            .respond_with(junit_endpoint(p.clone()))
             .mount(&s)
             .await;
 
