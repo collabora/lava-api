@@ -591,14 +591,14 @@ mod tests {
         Some as GSome, SubsetsFromPersianRug, Time,
     };
     use chrono::{DateTime, Duration, Utc};
-    use futures::TryStreamExt;
+    use futures::{AsyncReadExt, StreamExt, TryStreamExt};
     use lava_api_mock::{
         Device as MockDevice, DeviceType as MockDeviceType, Group as MockGroup, Job as MockJob,
-        JobHealth as MockJobHealth, JobState as MockJobState, LavaMock, PaginationLimits,
+        JobHealth as MockJobHealth, JobState as MockJobState, LavaMock, PaginationLimits, PassFail,
         PopulationParams, SharedState, Tag as MockTag, User as MockUser,
     };
     use persian_rug::{Accessor, Context, Proxy};
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
     use std::convert::{Infallible, TryFrom, TryInto};
     use std::str::FromStr;
     use test_log::test;
@@ -977,5 +977,66 @@ mod tests {
             count += 1;
         }
         assert_eq!(count, 50);
+    }
+
+    #[test(tokio::test)]
+    async fn test_junit() {
+        let pop = PopulationParams::builder()
+            .jobs(3usize)
+            .test_suites(6usize)
+            .test_cases(20usize)
+            .build();
+        let state = SharedState::new_populated(pop);
+        let server = LavaMock::new(
+            state.clone(),
+            PaginationLimits::builder().test_cases(Some(6)).build(),
+        )
+        .await;
+
+        let mut map = BTreeMap::new();
+        let start = state.access();
+        for t in start.get_iter::<lava_api_mock::TestCase<lava_api_mock::State>>() {
+            map.insert(t.name.clone(), t.clone());
+        }
+
+        let lava = Lava::new(&server.uri(), None).expect("failed to make lava server");
+        let mut seen = BTreeSet::new();
+
+        for job in start.get_iter::<lava_api_mock::Job<lava_api_mock::State>>() {
+            let mut v = Vec::new();
+            lava.job_results_as_junit(job.id)
+                .map(|item| item.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)))
+                .into_async_read()
+                .read_to_end(&mut v)
+                .await
+                .expect("failed to read junit output");
+
+            let report = junit_parser::from_reader(std::io::Cursor::new(v))
+                .expect("failed to parse mock junit output");
+
+            for suite in report.suites.iter() {
+                for test in suite.cases.iter() {
+                    assert!(!seen.contains(&test.name));
+                    assert!(map.contains_key(&test.name));
+                    let tt = map.get(&test.name).unwrap();
+                    match tt.result {
+                        PassFail::Pass => {
+                            assert!(test.status.is_success());
+                        }
+                        PassFail::Fail => {
+                            assert!(test.status.is_failure());
+                        }
+                        PassFail::Skip => {
+                            assert!(test.status.is_skipped());
+                        }
+                        PassFail::Unknown => {
+                            assert!(test.status.is_error());
+                        }
+                    }
+                    seen.insert(test.name.clone());
+                }
+            }
+        }
+        assert_eq!(seen.len(), 60);
     }
 }
