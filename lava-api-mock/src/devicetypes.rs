@@ -224,9 +224,9 @@ mod test {
                 .architecture(|| None)
                 .processor(|| None)
                 .cpu_model(Repeat::new([None, Some("".to_string())]))
-                .aliases(|| Vec::new())
+                .aliases(Vec::new)
                 .bits(|| None)
-                .cores(|| Vec::new())
+                .cores(Vec::new)
                 .core_count(|| None)
                 .description(Repeat::new([None, Some("".to_string())]))
                 .health_frequency(|| 10);

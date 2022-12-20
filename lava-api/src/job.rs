@@ -724,7 +724,7 @@ mod tests {
                 job.requested_device_type.as_ref(),
                 jj.requested_device_type
                     .as_ref()
-                    .map(|t| &start.get(&t).name)
+                    .map(|t| &start.get(t).name)
             );
 
             assert_eq!(job.tags.len(), jj.tags.len());
@@ -736,7 +736,7 @@ mod tests {
 
             assert_eq!(
                 job.actual_device.as_ref(),
-                jj.actual_device.as_ref().map(|t| &start.get(&t).hostname)
+                jj.actual_device.as_ref().map(|t| &start.get(t).hostname)
             );
             assert_eq!(Some(job.submit_time), jj.submit_time);
             assert_eq!(job.start_time, jj.start_time);
@@ -800,8 +800,8 @@ mod tests {
                 base_date - Duration::minutes(1),
                 Duration::minutes(-1),
             )))
-            .start_time(GSome(Time::new(base_date.clone(), Duration::minutes(-1))))
-            .end_time(GSome(Time::new(base_date.clone(), Duration::seconds(-30))));
+            .start_time(GSome(Time::new(base_date, Duration::minutes(-1))))
+            .end_time(GSome(Time::new(base_date, Duration::seconds(-30))));
 
         let _ = GeneratorWithPersianRugMutIterator::new(&mut gen, server.state_mut())
             .take(50)

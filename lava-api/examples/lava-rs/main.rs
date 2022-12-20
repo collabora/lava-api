@@ -15,7 +15,6 @@ use lava_api::joblog::JobLogError;
 use lava_api::worker::{self, Worker};
 use lava_api::Lava;
 use structopt::StructOpt;
-use tokio::io::AsyncWriteExt;
 use tokio::time::sleep;
 
 fn device_health_to_emoji(health: device::Health) -> &'static str {
@@ -82,7 +81,7 @@ async fn jobs(lava: &Lava, opts: JobsCmd) -> Result<()> {
     let mut num = opts.limit;
     while let Some(w) = jobs.try_next().await? {
         println!(" 💤️  [{}]  {}", w.id, w.description);
-        num = num - 1;
+        num -= 1;
         if num == 0 {
             match jobs.reported_items() {
                 Some(n) => println!("\n…and {} more jobs", n - 10),
@@ -102,7 +101,7 @@ async fn submit(lava: &Lava, opts: SubmitCmd) -> Result<()> {
 
     let mut ids = lava.submit_job(&definition).await?;
     println!("Submitted job(s): {:?}", ids);
-    let id = ids.pop().ok_or(anyhow!("No job id"))?;
+    let id = ids.pop().ok_or_else(|| anyhow!("No job id"))?;
     if opts.follow {
         // TODO support following more then 1 job
         let builder = lava.jobs().id(id);
@@ -163,7 +162,7 @@ struct SubmitCmd {
 #[derive(StructOpt, Debug)]
 struct LogCmd {
     #[structopt(short, long)]
-    follow: bool,
+    _follow: bool,
     job: i64,
 }
 
