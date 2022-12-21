@@ -4,7 +4,7 @@ use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use futures::stream::{self, Stream, StreamExt};
-use futures::FutureExt;
+use futures::{FutureExt, TryStreamExt};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_with::DeserializeFromStr;
@@ -547,10 +547,10 @@ pub enum ResultsError {
     UnexpectedReply(reqwest::StatusCode),
 }
 
-pub fn job_results_as_junit(
+pub async fn job_results_as_junit(
     lava: &Lava,
     id: i64,
-) -> impl Stream<Item = Result<Bytes, ResultsError>> + Send + Unpin + '_ {
+) -> Result<impl Stream<Item = Result<Bytes, ResultsError>> + Send + Unpin + '_, ResultsError> {
     let mut url = lava.base.clone();
     url.path_segments_mut()
         .unwrap()
@@ -560,25 +560,11 @@ pub fn job_results_as_junit(
         .push("junit")
         .push("");
 
-    Box::pin(
-        async move {
-            let b: Pin<Box<dyn Stream<Item = Result<Bytes, ResultsError>> + Send>> =
-                match lava.client.get(url).send().await {
-                    Ok(res) => match res.status() {
-                        StatusCode::OK => Box::pin(
-                            res.bytes_stream()
-                                .map(|item| item.map_err(ResultsError::from)),
-                        ),
-                        s => Box::pin(stream::once(async move {
-                            Err(ResultsError::UnexpectedReply(s))
-                        })),
-                    },
-                    Err(e) => Box::pin(stream::once(async move { Err(e.into()) })),
-                };
-            b
-        }
-        .flatten_stream(),
-    )
+    let res = lava.client.get(url).send().await?;
+    match res.status() {
+        StatusCode::OK => Ok(res.bytes_stream().map_err(ResultsError::from)),
+        s => Err(ResultsError::UnexpectedReply(s)),
+    }
 }
 
 #[cfg(test)]
@@ -1005,7 +991,9 @@ mod tests {
         for job in start.get_iter::<lava_api_mock::Job<lava_api_mock::State>>() {
             let mut v = Vec::new();
             lava.job_results_as_junit(job.id)
-                .map(|item| item.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)))
+                .await
+                .expect("failed to get junit output")
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
                 .into_async_read()
                 .read_to_end(&mut v)
                 .await

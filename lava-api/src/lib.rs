@@ -197,11 +197,11 @@ impl Lava {
         job::cancel_job(self, id).await
     }
 
-    pub fn job_results_as_junit(
+    pub async fn job_results_as_junit(
         &self,
         id: i64,
-    ) -> impl Stream<Item = Result<Bytes, job::ResultsError>> + '_ {
-        job::job_results_as_junit(self, id)
+    ) -> Result<impl Stream<Item = Result<Bytes, job::ResultsError>> + '_, job::ResultsError> {
+        job::job_results_as_junit(self, id).await
     }
 
     /// Obtain a [`Stream`](futures::stream::Stream) of all the
