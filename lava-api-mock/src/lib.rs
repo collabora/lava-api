@@ -28,9 +28,9 @@
 //! and [`BuildableWithPersianRug`](boulder::BuildableWithPersianRug)
 //! which are from the [`boulder`] crate.
 //!
-//! # LavaMock
+//! # Server
 //!
-//! Most users will want to base their tests around [`LavaMock`],
+//! Most users will want to base their tests around [`Server`],
 //! which is a [`django-query`](django_query) derived server, which
 //! provides all of the v0.2 query REST endpoints of a standard Lava
 //! server. See the documentation for details of its limitations. The
@@ -42,14 +42,14 @@
 //! Example:
 //! ```rust
 //! use futures::stream::TryStreamExt;
-//! use lava_api_mock::{LavaMock, PaginationLimits, PopulationParams, SharedState};
+//! use lava_api_mock::{Server, PaginationLimits, PopulationParams, SharedState};
 //! use lava_api::Lava;
 //!
 //! # tokio_test::block_on( async {
 //! // Make the mock server
 //! let limits = PaginationLimits::new();
 //! let population = PopulationParams::new();
-//! let mock = LavaMock::new(SharedState::new_populated(population), limits).await;
+//! let mock = Server::new(SharedState::new_populated(population), limits).await;
 //!
 //! // Make the Lava client for reading back data from the server
 //! let lava = Lava::new(&mock.uri(), None).expect("failed to make lava client");
@@ -69,7 +69,8 @@
 mod devices;
 mod devicetypes;
 mod jobs;
-mod lava_mock;
+mod mock;
+mod server;
 mod state;
 mod tags;
 mod testcases;
@@ -80,7 +81,8 @@ pub use devices::{Device, Health as DeviceHealth, State as DeviceState};
 pub use devicetypes::{Alias, Architecture, BitWidth, Core, DeviceType, ProcessorFamily};
 pub use jobs::Job;
 pub use jobs::{Health as JobHealth, State as JobState};
-pub use lava_mock::{LavaMock, PaginationLimits};
+pub use mock::{create_mock, Mock as LavaMock};
+pub use server::{PaginationLimits, Server};
 pub use state::{PopulationParams, SharedState, State};
 pub use tags::Tag;
 pub use testcases::{Metadata, PassFail, TestCase, TestSet, TestSuite};

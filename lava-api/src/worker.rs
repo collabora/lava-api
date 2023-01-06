@@ -31,10 +31,14 @@ pub struct Worker {
 mod tests {
     use crate::Lava;
     use boulder::{Buildable, Builder};
+    use chrono::Utc;
     use futures::TryStreamExt;
-    use lava_api_mock::{LavaMock, PaginationLimits, PopulationParams, SharedState, State, Worker};
+    use lava_api_mock::{
+        create_mock, PaginationLimits, PopulationParams, Server, SharedState, State, Worker,
+    };
     use persian_rug::Accessor;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
+    use std::iter::FromIterator;
     use test_log::test;
 
     /// Stream 51 workers with a page limit of 2 from the server
@@ -42,7 +46,7 @@ mod tests {
     async fn test_basic() {
         let state =
             SharedState::new_populated(PopulationParams::builder().workers(51usize).build());
-        let server = LavaMock::new(
+        let server = Server::new(
             state.clone(),
             PaginationLimits::builder().workers(Some(2)).build(),
         )
@@ -68,6 +72,32 @@ mod tests {
             assert_eq!(worker.health.to_string(), wk.health.to_string());
 
             seen.insert(worker.hostname.clone(), worker.clone());
+        }
+        assert_eq!(seen.len(), 51);
+    }
+
+    /// Stream 51 workers with a page limit of 2 from the server
+    #[test(tokio::test)]
+    async fn test_basic_mock() {
+        let (mut p, _clock) = create_mock(Utc::now()).await;
+
+        let workers = BTreeSet::from_iter(p.generate_workers(51).into_iter());
+
+        let lava = Lava::new(&p.uri(), None).expect("failed to make lava server");
+
+        let mut lw = lava.workers();
+
+        let mut seen = BTreeSet::new();
+        while let Some(worker) = lw.try_next().await.expect("failed to get worker") {
+            assert!(!seen.contains(&worker.hostname));
+            assert!(workers.contains(&worker.hostname));
+            p.with_worker(&worker.hostname, |wk| {
+                assert_eq!(worker.hostname, wk.hostname);
+                assert_eq!(worker.state.to_string(), wk.state.to_string());
+                assert_eq!(worker.health.to_string(), wk.health.to_string());
+            });
+
+            seen.insert(worker.hostname.clone());
         }
         assert_eq!(seen.len(), 51);
     }

@@ -6,7 +6,7 @@ use clone_replace::MutateGuard;
 use django_query::mock::{nested_endpoint_matches, NestedEndpointParams};
 use std::sync::Arc;
 
-/// Pagination limits for constructing a [`LavaMock`] instance.
+/// Pagination limits for constructing a [`Server`] instance.
 ///
 /// A running Lava instance allows the default pagination of endpoints
 /// to be customised, and specifying default pagination can be
@@ -53,7 +53,7 @@ impl PaginationLimits {
 /// - `/api/v0.2/jobs/<id>/tests/`
 /// - `/api/v0.2/jobs/<id>/suites/`
 ///
-/// You can use [`uri`](LavaMock::uri) to find the initial portion
+/// You can use [`uri`](Server::uri) to find the initial portion
 /// of the URL for your test instance.
 ///
 /// The mock object does not support the Lava mutation endpoints, but
@@ -61,21 +61,21 @@ impl PaginationLimits {
 /// There are two ways to do this:
 /// - You can keep a clone of the [`SharedState`] you pass in and obtain
 ///   a [`MutateGuard`] with [`mutate`](SharedState::mutate).
-/// - You can call [`state_mut`](LavaMock::state_mut) to get a [`MutateGuard`]
+/// - You can call [`state_mut`](Server::state_mut) to get a [`MutateGuard`]
 ///   for the enclosed [`SharedState`] directly.
-pub struct LavaMock {
+pub struct Server {
     server: wiremock::MockServer,
     state: SharedState,
 }
 
-impl LavaMock {
-    /// Create and start a new [`LavaMock`]
+impl Server {
+    /// Create and start a new [`Server`]
     ///
     /// Here `p` is the [`SharedState`] becomes the underlying data
     /// source for the mock, and `limits` are the default pagination
     /// limits as a [`PaginationLimits`] object, which are applied
     /// when the client does not give any.
-    pub async fn new(p: SharedState, limits: PaginationLimits) -> LavaMock {
+    pub async fn new(p: SharedState, limits: PaginationLimits) -> Server {
         let s = wiremock::MockServer::start().await;
 
         wiremock::Mock::given(wiremock::matchers::method("GET"))
@@ -146,13 +146,13 @@ impl LavaMock {
             .mount(&s)
             .await;
 
-        LavaMock {
+        Server {
             server: s,
             state: p,
         }
     }
 
-    /// Create and start a default new [`LavaMock`].
+    /// Create and start a default new [`Server`].
     ///
     /// This mock will have a default [`SharedState`] and default
     /// [`PaginationLimits`]. This gives a mock object with an empty
@@ -266,7 +266,7 @@ mod test {
             .take(500)
             .collect::<Vec<_>>();
 
-        let mock = LavaMock::new(s, Default::default()).await;
+        let mock = Server::new(s, Default::default()).await;
 
         let devices = make_request(mock.uri(), "devices/")
             .await

@@ -12,8 +12,10 @@ readme = "../README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { version = "0.4.20", features = ["serde"] }
 futures = "0.3"
+lava-api-mock = { path = "../lava-api-mock" }
+persian-rug = "0.1"
 serde = { version = "^1.0.97", features = ["derive"] }
 serde_json = "^1"
 serde_with = "2.0"
@@ -34,6 +36,5 @@ lava-api-mock = { path = "../lava-api-mock" }
 wiremock = "0.5"
 django-query = "0.2"
 boulder = "0.3"
-persian-rug = "0.1"
 test-log = "0.2"
 tokio-test = "0.4"

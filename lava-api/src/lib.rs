@@ -20,13 +20,13 @@
 //! Example:
 //! ```rust
 //! use futures::stream::TryStreamExt;
-//! # use lava_api_mock::{LavaMock, PaginationLimits, PopulationParams, SharedState};
+//! # use lava_api_mock::{Server, PaginationLimits, PopulationParams, SharedState};
 //! use lava_api::Lava;
 //! #
 //! # tokio_test::block_on( async {
 //! # let limits = PaginationLimits::new();
 //! # let population = PopulationParams::new();
-//! # let mock = LavaMock::new(SharedState::new_populated(population), limits).await;
+//! # let mock = Server::new(SharedState::new_populated(population), limits).await;
 //! # let service_uri = mock.uri();
 //! # let lava_token = None;
 //!

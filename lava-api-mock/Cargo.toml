@@ -12,9 +12,12 @@ readme = "../README.md"
 [dependencies]
 boulder = { version="0.3", features = ["persian-rug"] }
 chrono = { version = "0.4", features = ["serde"] }
+clocks = "0.0.1"
 clone-replace = "0.1"
 django-query = { version="0.2", features = ["wiremock", "persian-rug", "clone-replace"] }
 futures = "0.3"
+itertools = "0.10"
+num = "0.4"
 persian-rug = { version = "0.1", features = ["clone-replace"] }
 rust_decimal = "1"
 rust_decimal_macros = "1"

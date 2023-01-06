@@ -7,6 +7,7 @@ use futures::FutureExt;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_with::DeserializeFromStr;
+use std::convert::{Infallible, TryFrom, TryInto};
 use std::fmt;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -174,13 +175,13 @@ impl<'a> Jobs<'a> {
 /// Example:
 /// ```rust
 /// use futures::stream::TryStreamExt;
-/// # use lava_api_mock::{LavaMock, PaginationLimits, PopulationParams, SharedState};
+/// # use lava_api_mock::{Server, PaginationLimits, PopulationParams, SharedState};
 /// use lava_api::{Lava, job::State, job::Ordering};
 /// #
 /// # tokio_test::block_on( async {
 /// # let limits = PaginationLimits::new();
 /// # let population = PopulationParams::new();
-/// # let mock = LavaMock::new(SharedState::new_populated(population), limits).await;
+/// # let mock = Server::new(SharedState::new_populated(population), limits).await;
 /// # let service_uri = mock.uri();
 /// # let lava_token = None;
 ///
@@ -538,9 +539,96 @@ pub async fn cancel_job(lava: &Lava, id: i64) -> Result<(), CancellationError> {
     }
 }
 
+impl Job {
+    #[persian_rug::constraints(
+        context = C,
+        access(
+            lava_api_mock::User<C>,
+            lava_api_mock::Group<C>,
+            lava_api_mock::Tag<C>,
+            lava_api_mock::Device<C>,
+            lava_api_mock::DeviceType<C>
+        )
+    )]
+    pub fn from_mock<'b, B, C>(job: &lava_api_mock::Job<C>, context: B) -> Job
+    where
+        B: 'b + persian_rug::Accessor<Context = C>,
+        C: persian_rug::Context + 'static,
+    {
+        Self {
+            id: job.id,
+            submitter: context.get(&job.submitter).username.clone(),
+            viewing_groups: job
+                .viewing_groups
+                .iter()
+                .map(|g| context.get(g).id)
+                .collect::<Vec<_>>(),
+            description: job.description.clone(),
+            health_check: job.health_check,
+            requested_device_type: job
+                .requested_device_type
+                .map(|d| context.get(&d).name.to_string()),
+            tags: job
+                .tags
+                .iter()
+                .map(|t| Tag::from_mock(context.get(t), context.clone()))
+                .collect::<Vec<_>>(),
+            actual_device: job
+                .actual_device
+                .as_ref()
+                .map(|d| context.get(d).hostname.to_string()),
+            submit_time: job.submit_time.unwrap(),
+            start_time: job.start_time,
+            end_time: job.end_time,
+            state: job.state.try_into().unwrap(),
+            health: job.health.try_into().unwrap(),
+            priority: job.priority,
+            definition: job.definition.clone(),
+            original_definition: job.original_definition.clone(),
+            multinode_definition: job.multinode_definition.clone(),
+            failure_tags: job
+                .failure_tags
+                .iter()
+                .map(|t| Tag::from_mock(context.get(t), context.clone()))
+                .collect::<Vec<_>>(),
+            failure_comment: job.failure_comment.clone(),
+        }
+    }
+}
+
+impl TryFrom<lava_api_mock::JobState> for State {
+    type Error = Infallible;
+    fn try_from(state: lava_api_mock::JobState) -> Result<State, Self::Error> {
+        use State::*;
+
+        match state {
+            lava_api_mock::JobState::Submitted => Ok(Submitted),
+            lava_api_mock::JobState::Scheduling => Ok(Scheduling),
+            lava_api_mock::JobState::Scheduled => Ok(Scheduled),
+            lava_api_mock::JobState::Running => Ok(Running),
+            lava_api_mock::JobState::Canceling => Ok(Canceling),
+            lava_api_mock::JobState::Finished => Ok(Finished),
+        }
+    }
+}
+
+impl TryFrom<lava_api_mock::JobHealth> for Health {
+    type Error = Infallible;
+    fn try_from(health: lava_api_mock::JobHealth) -> Result<Health, Self::Error> {
+        use Health::*;
+
+        match health {
+            lava_api_mock::JobHealth::Unknown => Ok(Unknown),
+            lava_api_mock::JobHealth::Complete => Ok(Complete),
+            lava_api_mock::JobHealth::Incomplete => Ok(Incomplete),
+            lava_api_mock::JobHealth::Canceled => Ok(Canceled),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Health, Job, Ordering, State, Tag};
+    use super::{Health, Ordering, State};
     use crate::Lava;
 
     use boulder::{
@@ -549,103 +637,17 @@ mod tests {
     };
     use chrono::{DateTime, Duration, Utc};
     use futures::TryStreamExt;
+
     use lava_api_mock::{
-        Device as MockDevice, DeviceType as MockDeviceType, Group as MockGroup, Job as MockJob,
-        JobHealth as MockJobHealth, JobState as MockJobState, LavaMock, PaginationLimits,
-        PopulationParams, SharedState, Tag as MockTag, User as MockUser,
+        create_mock, JobHealth as MockJobHealth, JobState as MockJobState, PaginationLimits,
+        PopulationParams, Server, SharedState,
     };
-    use persian_rug::{Accessor, Context, Proxy};
-    use std::collections::BTreeMap;
-    use std::convert::{Infallible, TryFrom, TryInto};
+
+    use persian_rug::{Accessor, Proxy};
+    use std::collections::{BTreeMap, BTreeSet};
+    use std::iter::FromIterator;
     use std::str::FromStr;
     use test_log::test;
-
-    impl Job {
-        #[persian_rug::constraints(
-            context = C,
-            access(
-                MockUser<C>,
-                MockGroup<C>,
-                MockTag<C>,
-                MockDevice<C>,
-                MockDeviceType<C>
-            )
-        )]
-        pub fn from_mock<'b, B, C>(job: &MockJob<C>, context: B) -> Job
-        where
-            B: 'b + Accessor<Context = C>,
-            C: Context + 'static,
-        {
-            Self {
-                id: job.id,
-                submitter: context.get(&job.submitter).username.clone(),
-                viewing_groups: job
-                    .viewing_groups
-                    .iter()
-                    .map(|g| context.get(g).id)
-                    .collect::<Vec<_>>(),
-                description: job.description.clone(),
-                health_check: job.health_check,
-                requested_device_type: job
-                    .requested_device_type
-                    .map(|d| context.get(&d).name.to_string()),
-                tags: job
-                    .tags
-                    .iter()
-                    .map(|t| Tag::from_mock(context.get(t), context.clone()))
-                    .collect::<Vec<_>>(),
-                actual_device: job
-                    .actual_device
-                    .as_ref()
-                    .map(|d| context.get(d).hostname.to_string()),
-                submit_time: job.submit_time.unwrap(),
-                start_time: job.start_time,
-                end_time: job.end_time,
-                state: job.state.try_into().unwrap(),
-                health: job.health.try_into().unwrap(),
-                priority: job.priority,
-                definition: job.definition.clone(),
-                original_definition: job.original_definition.clone(),
-                multinode_definition: job.multinode_definition.clone(),
-                failure_tags: job
-                    .failure_tags
-                    .iter()
-                    .map(|t| Tag::from_mock(context.get(t), context.clone()))
-                    .collect::<Vec<_>>(),
-                failure_comment: job.failure_comment.clone(),
-            }
-        }
-    }
-
-    impl TryFrom<MockJobState> for State {
-        type Error = Infallible;
-        fn try_from(state: MockJobState) -> Result<State, Self::Error> {
-            use State::*;
-
-            match state {
-                MockJobState::Submitted => Ok(Submitted),
-                MockJobState::Scheduling => Ok(Scheduling),
-                MockJobState::Scheduled => Ok(Scheduled),
-                MockJobState::Running => Ok(Running),
-                MockJobState::Canceling => Ok(Canceling),
-                MockJobState::Finished => Ok(Finished),
-            }
-        }
-    }
-
-    impl TryFrom<MockJobHealth> for Health {
-        type Error = Infallible;
-        fn try_from(health: MockJobHealth) -> Result<Health, Self::Error> {
-            use Health::*;
-
-            match health {
-                MockJobHealth::Unknown => Ok(Unknown),
-                MockJobHealth::Complete => Ok(Complete),
-                MockJobHealth::Incomplete => Ok(Incomplete),
-                MockJobHealth::Canceled => Ok(Canceled),
-            }
-        }
-    }
 
     #[test]
     fn test_display() {
@@ -685,14 +687,10 @@ mod tests {
         );
     }
 
-    /// Stream 50 jobs with a page limit of 7 from the server
-    /// checking that we correctly reconstruct their tags and that
-    /// they are all accounted for (that pagination is handled
-    /// properly)
     #[test(tokio::test)]
     async fn test_basic() {
         let state = SharedState::new_populated(PopulationParams::builder().jobs(50usize).build());
-        let server = LavaMock::new(
+        let server = Server::new(
             state.clone(),
             PaginationLimits::builder().jobs(Some(7)).build(),
         )
@@ -747,7 +745,6 @@ mod tests {
             assert_eq!(job.definition, jj.definition);
             assert_eq!(job.original_definition, jj.original_definition);
             assert_eq!(job.multinode_definition, jj.multinode_definition);
-
             assert_eq!(job.failure_tags.len(), jj.failure_tags.len());
             for i in 0..job.failure_tags.len() {
                 assert_eq!(job.viewing_groups[i], start.get(&jj.viewing_groups[i]).id);
@@ -759,13 +756,96 @@ mod tests {
         assert_eq!(seen.len(), 50);
     }
 
+    /* Create a datetime that is accurately represented with a fractional
+       part only of microseconds; remove any nanoseconds
+    */
+    fn microsecond_accurate(dt: chrono::DateTime<Utc>) -> chrono::DateTime<Utc> {
+        dt - Duration::nanoseconds(dt.timestamp_nanos() - dt.timestamp_micros() * 1000)
+    }
+
+    /// Stream 50 jobs with a page limit of 7 from the server
+    /// checking that we correctly reconstruct their tags and that
+    /// they are all accounted for (that pagination is handled
+    /// properly)
+    #[test(tokio::test)]
+    async fn test_basic_mock() {
+        let (mut p, _) = create_mock(microsecond_accurate(Utc::now())).await;
+
+        let jobs = BTreeSet::from_iter(p.generate_jobs(50).into_iter());
+
+        let lava = Lava::new(&p.uri(), None).expect("failed to make lava server");
+
+        let mut lj = lava.jobs().query();
+
+        let mut seen = BTreeSet::new();
+        while let Some(job) = lj.try_next().await.expect("failed to get job") {
+            assert!(!seen.contains(&job.id));
+            assert!(jobs.contains(&job.id));
+
+            p.with_job(job.id, |jj| {
+                assert_eq!(job.description, jj.description);
+
+                p.with_proxy(&jj.submitter, |u| {
+                    assert_eq!(job.submitter, u.username);
+                });
+                assert_eq!(job.viewing_groups.len(), jj.viewing_groups.len());
+
+                for i in 0..job.viewing_groups.len() {
+                    p.with_proxy(&jj.viewing_groups[i], |g| {
+                        assert_eq!(job.viewing_groups[i], g.id);
+                    });
+                }
+
+                assert_eq!(job.health_check, jj.health_check);
+
+                p.with_option_proxy(&jj.requested_device_type, |dt| {
+                    assert_eq!(job.requested_device_type.as_ref(), dt.map(|dt| &dt.name));
+                });
+
+                assert_eq!(job.tags.len(), jj.tags.len());
+                for i in 0..job.tags.len() {
+                    p.with_proxy(&jj.tags[i], |t| {
+                        assert_eq!(job.tags[i].id, t.id);
+                        assert_eq!(job.tags[i].name, t.name);
+                        assert_eq!(job.tags[i].description, t.description);
+                    });
+                }
+
+                p.with_option_proxy(&jj.actual_device, |d| {
+                    assert_eq!(job.actual_device.as_ref(), d.map(|h| &h.hostname));
+                });
+
+                assert_eq!(Some(job.submit_time), jj.submit_time);
+                assert_eq!(job.start_time, jj.start_time);
+                assert_eq!(job.end_time, jj.end_time);
+                assert_eq!(job.state.to_string(), jj.state.to_string());
+                assert_eq!(job.health.to_string(), jj.health.to_string());
+                assert_eq!(job.priority, jj.priority);
+                assert_eq!(job.definition, jj.definition);
+                assert_eq!(job.original_definition, jj.original_definition);
+                assert_eq!(job.multinode_definition, jj.multinode_definition);
+
+                assert_eq!(job.failure_tags.len(), jj.failure_tags.len());
+                for i in 0..job.failure_tags.len() {
+                    p.with_proxy(&jj.viewing_groups[i], |g| {
+                        assert_eq!(job.viewing_groups[i], g.id);
+                    })
+                }
+                assert_eq!(job.failure_comment, jj.failure_comment);
+            });
+
+            seen.insert(job.id);
+        }
+        assert_eq!(seen.len(), 50);
+    }
+
     /// Stream 50 jobs with a page limit of 7 from the server
     /// checking that we correctly reconstruct their tags and that
     /// they are all accounted for (that pagination is handled
     /// properly)
     #[test(tokio::test)]
     async fn test_jobs_builder() {
-        let mut server = lava_api_mock::LavaMock::new(
+        let mut server = lava_api_mock::Server::new(
             SharedState::new_populated(
                 PopulationParams::builder()
                     .tags(5usize)
