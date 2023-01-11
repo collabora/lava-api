@@ -1,9 +1,10 @@
 //! Retrieve jobs
 
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use futures::stream::{self, Stream, StreamExt};
-use futures::FutureExt;
+use futures::{FutureExt, TryStreamExt};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_with::DeserializeFromStr;
@@ -538,6 +539,34 @@ pub async fn cancel_job(lava: &Lava, id: i64) -> Result<(), CancellationError> {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum ResultsError {
+    #[error("Request failed {0}")]
+    Request(#[from] reqwest::Error),
+    #[error("Unexpected reply: {0}")]
+    UnexpectedReply(reqwest::StatusCode),
+}
+
+pub async fn job_results_as_junit(
+    lava: &Lava,
+    id: i64,
+) -> Result<impl Stream<Item = Result<Bytes, ResultsError>> + Send + Unpin + '_, ResultsError> {
+    let mut url = lava.base.clone();
+    url.path_segments_mut()
+        .unwrap()
+        .pop_if_empty()
+        .push("jobs")
+        .push(&id.to_string())
+        .push("junit")
+        .push("");
+
+    let res = lava.client.get(url).send().await?;
+    match res.status() {
+        StatusCode::OK => Ok(res.bytes_stream().map_err(ResultsError::from)),
+        s => Err(ResultsError::UnexpectedReply(s)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Health, Job, Ordering, State, Tag};
@@ -548,14 +577,14 @@ mod tests {
         Some as GSome, SubsetsFromPersianRug, Time,
     };
     use chrono::{DateTime, Duration, Utc};
-    use futures::TryStreamExt;
+    use futures::{AsyncReadExt, TryStreamExt};
     use lava_api_mock::{
         Device as MockDevice, DeviceType as MockDeviceType, Group as MockGroup, Job as MockJob,
-        JobHealth as MockJobHealth, JobState as MockJobState, LavaMock, PaginationLimits,
+        JobHealth as MockJobHealth, JobState as MockJobState, LavaMock, PaginationLimits, PassFail,
         PopulationParams, SharedState, Tag as MockTag, User as MockUser,
     };
     use persian_rug::{Accessor, Context, Proxy};
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
     use std::convert::{Infallible, TryFrom, TryInto};
     use std::str::FromStr;
     use test_log::test;
@@ -934,5 +963,68 @@ mod tests {
             count += 1;
         }
         assert_eq!(count, 50);
+    }
+
+    #[test(tokio::test)]
+    async fn test_junit() {
+        let pop = PopulationParams::builder()
+            .jobs(3usize)
+            .test_suites(6usize)
+            .test_cases(20usize)
+            .build();
+        let state = SharedState::new_populated(pop);
+        let server = LavaMock::new(
+            state.clone(),
+            PaginationLimits::builder().test_cases(Some(6)).build(),
+        )
+        .await;
+
+        let mut map = BTreeMap::new();
+        let start = state.access();
+        for t in start.get_iter::<lava_api_mock::TestCase<lava_api_mock::State>>() {
+            map.insert(t.name.clone(), t.clone());
+        }
+
+        let lava = Lava::new(&server.uri(), None).expect("failed to make lava server");
+        let mut seen = BTreeSet::new();
+
+        for job in start.get_iter::<lava_api_mock::Job<lava_api_mock::State>>() {
+            let mut v = Vec::new();
+            lava.job_results_as_junit(job.id)
+                .await
+                .expect("failed to obtain junit output")
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                .into_async_read()
+                .read_to_end(&mut v)
+                .await
+                .expect("failed to fully read junit output");
+
+            let report = junit_parser::from_reader(std::io::Cursor::new(v))
+                .expect("failed to parse mock junit output");
+
+            for suite in report.suites.iter() {
+                for test in suite.cases.iter() {
+                    assert!(!seen.contains(&test.name));
+                    assert!(map.contains_key(&test.name));
+                    let tt = map.get(&test.name).unwrap();
+                    match tt.result {
+                        PassFail::Pass => {
+                            assert!(test.status.is_success());
+                        }
+                        PassFail::Fail => {
+                            assert!(test.status.is_failure());
+                        }
+                        PassFail::Skip => {
+                            assert!(test.status.is_skipped());
+                        }
+                        PassFail::Unknown => {
+                            assert!(test.status.is_error());
+                        }
+                    }
+                    seen.insert(test.name.clone());
+                }
+            }
+        }
+        assert_eq!(seen.len(), 60);
     }
 }
