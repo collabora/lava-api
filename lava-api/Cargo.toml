@@ -1,6 +1,6 @@
 [package]
 name = "lava-api"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Sjoerd Simons <sjoerd@collabora.com>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -30,7 +30,7 @@ bytes = "1.2.1"
 anyhow = "1"
 structopt = "0.3"
 env_logger = "0.9"
-lava-api-mock = { path = "../lava-api-mock" }
+lava-api-mock = { path = "../lava-api-mock", version = "0.1.1" }
 wiremock = "0.5"
 django-query = "0.2"
 boulder = "0.3"
