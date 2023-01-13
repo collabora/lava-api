@@ -29,7 +29,7 @@ bytes = "1.2.1"
 [dev-dependencies]
 anyhow = "1"
 structopt = "0.3"
-env_logger = "0.9"
+env_logger = "0.10"
 lava-api-mock = { path = "../lava-api-mock", version = "0.1.1" }
 wiremock = "0.5"
 django-query = "0.2"
