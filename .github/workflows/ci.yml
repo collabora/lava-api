@@ -1,10 +1,11 @@
+name: CI
 on:
   push:
     branches-ignore:
-      - '*.tmp'
+      - "gh-readonly-queue/**"
   pull_request:
+  merge_group:
   workflow_dispatch:
-name: CI
 
 env:
   RUST_BACKTRACE: 1
@@ -14,54 +15,60 @@ jobs:
     name: cargo check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --all-features
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.70
+      - run: cargo check --all-targets --all-features
 
   fmt:
     name: cargo fmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.70
         with:
-          toolchain: stable
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all --check
+          components: rustfmt
+      - run: cargo fmt --all --check
 
   test:
     name: cargo test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           lfs: 'true'
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
+      - uses: dtolnay/rust-toolchain@1.70
+      - run: cargo test --all-targets --all-features
 
   clippy:
     name: cargo clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.70
         with:
-          toolchain: stable
-      - uses: actions-rs/cargo@v1
+          components: clippy
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+
+  clippy-latest:
+    name: cargo clippy latest
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          command: clippy
-          args: --all-targets -- -D warnings
+          components: clippy
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+
+  minimal-dependencies:
+    name: minimal direct dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy
+      - run: cargo check -Z direct-minimal-versions
 
   # Job to key success status against
   allgreen:
@@ -72,6 +79,7 @@ jobs:
       - fmt
       - test
       - clippy
+      - minimal-dependencies
     runs-on: ubuntu-latest
     steps:
       - name: Decide whether the needed jobs succeeded or failed
