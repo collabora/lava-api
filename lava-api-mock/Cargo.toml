@@ -11,23 +11,23 @@ readme = "../README.md"
 
 [dependencies]
 boulder = { version="0.3", features = ["persian-rug"] }
-chrono = { version = "0.4", features = ["serde"] }
-clone-replace = "0.1"
+chrono = { version = "0.4.20", features = ["serde"] }
+clone-replace = "0.1.1"
 django-query = { version="0.2", features = ["wiremock", "persian-rug", "clone-replace"] }
 futures = "0.3"
 persian-rug = { version = "0.1", features = ["clone-replace"] }
 rust_decimal = "1"
 rust_decimal_macros = "1"
-serde = { version = "^1.0.97", features = ["derive"] }
-serde_json = "^1"
-serde_with = "2.0"
+serde = { version = "1.0.157", features = ["derive"] }
+serde_json = "1.0.51"
+serde_with = "3"
 serde_yaml = "0.9"
-tokio = { version = "1.4", features = ["macros", "rt", "rt-multi-thread", "sync"] }
-strum = { version = "0.24", features = [ "derive" ] }
-url = "2"
-thiserror = "1.0"
-log = "0.4"
-wiremock = { version = "0.5" }
+tokio = { version = "1.35", features = ["macros", "rt", "rt-multi-thread", "sync"] }
+strum = { version = "0.25", features = [ "derive" ] }
+url = "2.2"
+thiserror = "1.0.56"
+log = "0.4.8"
+wiremock = { version = "0.5.22" }
 rand = { version = "0.8" }
 arc-swap = "1.4"
 rand_chacha = "0.3"
@@ -35,10 +35,10 @@ junit-report = "0.8.1"
 regex = "1.7.0"
 
 [dev-dependencies]
-anyhow = "1"
-env_logger = "0.9"
+anyhow = "1.0.26"
+env_logger = "0.10"
 test-log = "0.2"
 reqwest = "0.11"
 tokio-test = "0.4"
 lava-api = { path = "../lava-api" }
-junit-parser = "0.2"
+junit-parser = "1"
