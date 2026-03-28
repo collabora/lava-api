@@ -17,6 +17,23 @@ use lava_api::worker::{self, Worker};
 use structopt::StructOpt;
 use tokio::time::sleep;
 
+use chrono::{DateTime, Utc};
+
+fn format_duration(since: DateTime<Utc>) -> String {
+    let delta = Utc::now() - since;
+    let days = delta.num_days();
+    let hours = delta.num_hours() % 24;
+    let mins = delta.num_minutes() % 60;
+
+    if days > 0 {
+        format!("{days}d {hours}h {mins}m")
+    } else if delta.num_hours() > 0 {
+        format!("{}h {}m", delta.num_hours(), mins)
+    } else {
+        format!("{}m", delta.num_minutes())
+    }
+}
+
 fn device_health_to_emoji(health: device::Health) -> &'static str {
     use device::Health::*;
     match health {
@@ -58,6 +75,121 @@ async fn devices(lava: &Lava) -> Result<()> {
                 .join(", "),
         );
     }
+    Ok(())
+}
+
+async fn bad_devices(lava: &Lava) -> Result<()> {
+    use std::collections::HashMap;
+
+    #[derive(Debug)]
+    struct BadDeviceRow {
+        hostname: String,
+        worker_host: String,
+        description: Option<String>,
+        tags: String,
+        bad_since: Option<DateTime<Utc>>,
+    }
+
+    let mut rows = Vec::new();
+    let mut devices = lava.devices();
+
+    while let Some(d) = devices.try_next().await? {
+        if d.health == device::Health::Bad {
+            rows.push(BadDeviceRow {
+                hostname: d.hostname,
+                worker_host: d.worker_host,
+                description: d.description,
+                tags: d
+                    .tags
+                    .into_iter()
+                    .map(|t| t.name)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                bad_since: None,
+            });
+        }
+    }
+
+    if rows.is_empty() {
+        println!("No bad devices found.");
+        return Ok(());
+    }
+
+    let mut earliest_failed_healthcheck: HashMap<String, DateTime<Utc>> = HashMap::new();
+
+    // Create a set of bad device hostnames
+    let bad_device_hostnames: std::collections::HashSet<String> =
+        rows.iter().map(|r| r.hostname.clone()).collect();
+
+    // Filter for incomplete health checks on the server-side, ordered by oldest job to find when
+    // the device first failed a health check.
+    let mut jobs = lava
+        .jobs()
+        .state(job::State::Finished)
+        .health(job::Health::Incomplete)
+        .ordering(job::Ordering::EndTime, true)
+        .query();
+
+    let num_bad_devices = rows.len();
+
+    while let Some(j) = jobs.try_next().await? {
+        if j.health_check
+            && let (Some(device), Some(end_time)) = (j.actual_device.as_ref(), j.end_time)
+        {
+            // Only track devices in the "bad devices" list
+            if bad_device_hostnames.contains(device) {
+                earliest_failed_healthcheck
+                    .entry(device.clone())
+                    .or_insert(end_time);
+
+                // Stop when the earliest failure is found
+                if earliest_failed_healthcheck.len() == num_bad_devices {
+                    break;
+                }
+            }
+        }
+    }
+
+    for row in &mut rows {
+        row.bad_since = earliest_failed_healthcheck.get(&row.hostname).cloned();
+    }
+
+    // Sort devices with unknown durations first.
+    rows.sort_by_key(|row| row.bad_since);
+
+    println!("Bad Devices:");
+
+    for row in &rows {
+        match row.bad_since {
+            Some(ts) => {
+                println!(
+                    " {} {} on {} [since {}]",
+                    device_health_to_emoji(device::Health::Bad),
+                    row.hostname,
+                    row.worker_host,
+                    format_duration(ts)
+                );
+            }
+            None => {
+                println!(
+                    " {} {} on {} [bad duration unknown]",
+                    device_health_to_emoji(device::Health::Bad),
+                    row.hostname,
+                    row.worker_host,
+                );
+            }
+        }
+
+        if !row.tags.is_empty() {
+            println!("     Tags: {}", row.tags);
+        }
+        if let Some(desc) = &row.description {
+            println!("     Description: {}", desc);
+        }
+    }
+
+    println!("\nTotal bad devices: {}", rows.len());
+
     Ok(())
 }
 
@@ -229,6 +361,8 @@ struct HealthChecksCmd {
 enum Command {
     /// List devices
     Devices,
+    /// List bad devices
+    BadDevices,
     /// Show a job log
     Log(LogCmd),
     /// Submit a job
@@ -263,6 +397,7 @@ async fn main() -> Result<()> {
 
     match opts.command {
         Command::Devices => devices(&l).await?,
+        Command::BadDevices => bad_devices(&l).await?,
         Command::Submit(s) => submit(&l, s).await?,
         Command::Log(opts) => log(&l, opts).await?,
         Command::Jobs(j) => jobs(&l, j).await?,
