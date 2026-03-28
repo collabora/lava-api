@@ -152,6 +152,50 @@ async fn workers(lava: &Lava) -> Result<()> {
     Ok(())
 }
 
+async fn healthchecks(lava: &Lava, opts: HealthChecksCmd) -> Result<()> {
+    println!("\nHealthcheck summary for Device: {}", opts.device);
+
+    let mut finished_jobs = lava.jobs().state(job::State::Finished).query();
+
+    let mut passed = 0;
+    let mut failed = 0;
+    let mut canceled = 0;
+    let mut unknown = 0;
+
+    while let Some(j) = finished_jobs.try_next().await? {
+        if j.health_check && j.actual_device.as_deref() == Some(&opts.device) {
+            match j.health {
+                job::Health::Complete => passed += 1,
+                job::Health::Incomplete => {
+                    failed += 1;
+                    if opts.show_failed {
+                        println!("  ❌ Job [{}] failed", j.id);
+                    }
+                }
+                job::Health::Canceled => canceled += 1,
+                job::Health::Unknown => unknown += 1,
+            }
+        }
+    }
+
+    let total = passed + failed + canceled + unknown;
+    println!("Total healthchecks ran: {}", total);
+    println!("✅ Passed: {}", passed);
+    println!("❌ Failed: {}", failed);
+    if canceled > 0 {
+        println!("⊘ Canceled: {}", canceled);
+    }
+    if unknown > 0 {
+        println!("❓ Unknown: {}", unknown);
+    }
+    if total > 0 {
+        let pass_rate = (passed as f64 / total as f64) * 100.0;
+        println!("Pass rate: {:.1}%", pass_rate);
+    }
+
+    Ok(())
+}
+
 #[derive(StructOpt, Debug)]
 struct SubmitCmd {
     #[structopt(short, long)]
@@ -173,6 +217,15 @@ struct JobsCmd {
 }
 
 #[derive(StructOpt, Debug)]
+struct HealthChecksCmd {
+    #[structopt(short, long)]
+    device: String,
+    #[structopt(short, long)]
+    /// Show individual failed healthcheck jobs
+    show_failed: bool,
+}
+
+#[derive(StructOpt, Debug)]
 enum Command {
     /// List devices
     Devices,
@@ -184,6 +237,8 @@ enum Command {
     Jobs(JobsCmd),
     /// List workers
     Workers,
+    /// Analyze healthcheck results for a device
+    Healthchecks(HealthChecksCmd),
 }
 
 #[derive(StructOpt, Debug)]
@@ -212,6 +267,7 @@ async fn main() -> Result<()> {
         Command::Log(opts) => log(&l, opts).await?,
         Command::Jobs(j) => jobs(&l, j).await?,
         Command::Workers => workers(&l).await?,
+        Command::Healthchecks(h) => healthchecks(&l, h).await?,
     }
 
     Ok(())
