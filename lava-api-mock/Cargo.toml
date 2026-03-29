@@ -3,7 +3,7 @@ name = "lava-api-mock"
 version = { workspace = true }
 authors = ["Edmund Smith <ed.smith@collabora.com>"]
 edition = "2024"
-rust-version = "1.85"
+rust-version = { workspace = true }
 license = "MIT OR Apache-2.0"
 description = "Mock crate for the LAVA REST APIs"
 homepage = "https://github.com/collabora/lava-api"

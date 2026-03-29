@@ -3,7 +3,7 @@ name = "lava-api"
 version = { workspace = true }
 authors = ["Sjoerd Simons <sjoerd@collabora.com>"]
 edition = "2024"
-rust-version = "1.85"
+rust-version = { workspace = true }
 license = "MIT OR Apache-2.0"
 description = "Helper crate to work with the LAVA REST APIs"
 homepage = "https://github.com/collabora/lava-api"
