@@ -1,6 +1,6 @@
 [package]
 name = "lava-api-mock"
-version = "0.1.2"
+version = { workspace = true }
 authors = ["Edmund Smith <ed.smith@collabora.com>"]
 edition = "2024"
 rust-version = "1.85"

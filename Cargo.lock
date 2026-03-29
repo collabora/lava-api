@@ -1437,7 +1437,7 @@ dependencies = [
 
 [[package]]
 name = "lava-api"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "boulder",
@@ -1467,7 +1467,7 @@ dependencies = [
 
 [[package]]
 name = "lava-api-mock"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "arc-swap",
