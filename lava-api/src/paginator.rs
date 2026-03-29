@@ -1,9 +1,9 @@
+use futures::FutureExt;
 use futures::future::BoxFuture;
 use futures::stream::Stream;
-use futures::FutureExt;
 use log::debug;
 use reqwest::Client;
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{Deserialize, de::DeserializeOwned};
 use std::collections::VecDeque;
 use std::pin::Pin;
 use std::task::{Context, Poll};

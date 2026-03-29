@@ -3,17 +3,17 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use anyhow::anyhow;
-use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
-use futures::stream::TryStreamExt;
+use anyhow::anyhow;
+use anyhow::bail;
 use futures::StreamExt;
+use futures::stream::TryStreamExt;
+use lava_api::Lava;
 use lava_api::device;
 use lava_api::job;
 use lava_api::joblog::JobLogError;
 use lava_api::worker::{self, Worker};
-use lava_api::Lava;
 use structopt::StructOpt;
 use tokio::time::sleep;
 

@@ -4,7 +4,7 @@ use django_query::{
     filtering::FilterableWithPersianRug, row::IntoRowWithPersianRug,
     sorting::SortableWithPersianRug,
 };
-use persian_rug::{contextual, Context, Proxy};
+use persian_rug::{Context, Proxy, contextual};
 use strum::{Display, EnumString};
 
 use crate::{
@@ -140,7 +140,7 @@ mod test {
     use boulder::BuilderWithPersianRug;
     use boulder::GeneratorWithPersianRugIterator;
     use boulder::Repeat;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use test_log::test;
 
     async fn make_request<T, U>(server_uri: T, endpoint: U) -> Result<Value>
@@ -263,18 +263,16 @@ mod test {
         let mut p = SharedState::new();
         {
             let m = p.mutate();
-            // let mut tag_gen = Proxy::<Tag<_>>::generator();
 
-            let gen = Proxy::<Device<_>>::generator()
+            let item_gen = Proxy::<Device<_>>::generator()
                 .health(Repeat!(Health::Maintenance, Health::Good))
                 .description(|| None)
                 .device_version(|| None)
                 .physical_owner(|| None)
                 .physical_group(|| None)
-                .last_health_report_job(|| None); // GSome(Proxy::<Job<state::State>>::generator())
-                                                  //gen.tags(move || (&mut tag_gen).into_iter().take(2).collect::<Vec<_>>());
+                .last_health_report_job(|| None);
 
-            let _ = GeneratorWithPersianRugIterator::new(gen, m)
+            let _ = GeneratorWithPersianRugIterator::new(item_gen, m)
                 .take(4)
                 .collect::<Vec<_>>();
         }

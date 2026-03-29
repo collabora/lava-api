@@ -4,7 +4,7 @@ use crate::{Alias, Device, DeviceType, Job, Tag, TestCase, TestSuite, Worker};
 
 use boulder::Buildable;
 use clone_replace::MutateGuard;
-use django_query::mock::{nested_endpoint_matches, NestedEndpointParams};
+use django_query::mock::{NestedEndpointParams, nested_endpoint_matches};
 use std::sync::Arc;
 
 /// Pagination limits for constructing a [`LavaMock`] instance.
@@ -204,7 +204,7 @@ impl LavaMock {
 mod test {
     use super::*;
 
-    use crate::{devicetypes::DeviceType, Device, Job, JobState};
+    use crate::{Device, Job, JobState, devicetypes::DeviceType};
 
     use anyhow::Result;
     use boulder::{
@@ -214,7 +214,7 @@ mod test {
     use boulder::{GeneratorToGeneratorWithPersianRugWrapper, GeneratorWithPersianRugMutIterator};
     use chrono::Utc;
     use persian_rug::Proxy;
-    use rand::{Rng, SeedableRng};
+    use rand::{RngExt, SeedableRng};
     use serde_json::Value;
 
     async fn make_request<T, U>(server_uri: T, endpoint: U) -> Result<Value>
@@ -244,7 +244,7 @@ mod test {
         let types = device_types.clone();
         let mut devices = Proxy::<Device<State>>::generator().device_type(
             GeneratorToGeneratorWithPersianRugWrapper::new(move || {
-                types[rng.gen_range(0..types.len())]
+                types[rng.random_range(0..types.len())]
             }),
         );
 
@@ -264,7 +264,7 @@ mod test {
                 Some(Utc::now())
             }))
             .requested_device_type(GeneratorToGeneratorWithPersianRugWrapper::new(move || {
-                Some(types[rng.gen_range(0..types.len())])
+                Some(types[rng.random_range(0..types.len())])
             }));
 
         let _ = GeneratorWithPersianRugMutIterator::new(&mut jobs, s.mutate())

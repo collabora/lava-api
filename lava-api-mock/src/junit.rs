@@ -119,7 +119,7 @@ mod tests {
 
             let (suite, m) = Proxy::<TestSuite<State>>::generator().generate(m);
 
-            let gen = Proxy::<TestCase<State>>::generator()
+            let item_gen = Proxy::<TestCase<State>>::generator()
                 .name(Pattern!("example-case-{}", Inc(0)))
                 .unit(Repeat!("", "seconds"))
                 .result(|| PassFail::Pass)
@@ -140,7 +140,7 @@ mod tests {
                 .test_set(|| None)
                 .resource_uri(Pattern!("example-resource-uri-{}", Inc(0)));
 
-            let _ = GeneratorWithPersianRugIterator::new(gen, m)
+            let _ = GeneratorWithPersianRugIterator::new(item_gen, m)
                 .take(4)
                 .collect::<Vec<_>>();
         }

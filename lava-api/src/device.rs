@@ -1,7 +1,7 @@
 //! Retrieve devices
 
-use futures::future::BoxFuture;
 use futures::FutureExt;
+use futures::future::BoxFuture;
 use futures::{stream, stream::Stream, stream::StreamExt};
 use serde::Deserialize;
 use serde_with::DeserializeFromStr;
@@ -9,9 +9,9 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use strum::{Display, EnumString};
 
+use crate::Lava;
 use crate::paginator::{PaginationError, Paginator};
 use crate::tag::Tag;
-use crate::Lava;
 
 /// The current status of a [`Device`]
 #[derive(Clone, Copy, Debug, DeserializeFromStr, Display, EnumString, Eq, PartialEq)]
@@ -100,7 +100,7 @@ async fn transform_device(device: LavaDevice, lava: &Lava) -> Device {
     }
 }
 
-impl<'a> Stream for Devices<'a> {
+impl Stream for Devices<'_> {
     type Item = Result<Device, PaginationError>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
@@ -146,20 +146,18 @@ mod tests {
     };
     use persian_rug::{Accessor, Context};
     use std::collections::BTreeMap;
-    use std::convert::{Infallible, TryFrom, TryInto};
     use test_log::test;
 
-    impl TryFrom<MockDeviceHealth> for Health {
-        type Error = Infallible;
-        fn try_from(dev: MockDeviceHealth) -> Result<Health, Self::Error> {
+    impl From<MockDeviceHealth> for Health {
+        fn from(dev: MockDeviceHealth) -> Health {
             use Health::*;
             match dev {
-                MockDeviceHealth::Unknown => Ok(Unknown),
-                MockDeviceHealth::Maintenance => Ok(Maintenance),
-                MockDeviceHealth::Good => Ok(Good),
-                MockDeviceHealth::Bad => Ok(Bad),
-                MockDeviceHealth::Looping => Ok(Looping),
-                MockDeviceHealth::Retired => Ok(Retired),
+                MockDeviceHealth::Unknown => Unknown,
+                MockDeviceHealth::Maintenance => Maintenance,
+                MockDeviceHealth::Good => Good,
+                MockDeviceHealth::Bad => Bad,
+                MockDeviceHealth::Looping => Looping,
+                MockDeviceHealth::Retired => Retired,
             }
         }
     }
@@ -176,7 +174,7 @@ mod tests {
                 worker_host: context.get(&dev.worker_host).hostname.clone(),
                 device_type: context.get(&dev.device_type).name.clone(),
                 description: dev.description.clone(),
-                health: dev.health.clone().try_into().unwrap(),
+                health: dev.health.clone().into(),
                 tags: dev
                     .tags
                     .iter()

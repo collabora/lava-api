@@ -14,10 +14,10 @@ use std::task::{Context, Poll};
 use strum::{Display, EnumIter, EnumString, IntoEnumIterator};
 use thiserror::Error;
 
+use crate::Lava;
 use crate::paginator::{PaginationError, Paginator};
 use crate::queryset::{QuerySet, QuerySetMember};
 use crate::tag::Tag;
-use crate::Lava;
 
 /// The progress of a job through the system.
 #[derive(
@@ -151,7 +151,7 @@ pub struct Jobs<'a> {
     state: PagingState<'a>,
 }
 
-impl<'a> Jobs<'a> {
+impl Jobs<'_> {
     /// The server's latest report of how many [`Job`] instances are
     /// in the result set.
     ///
@@ -437,7 +437,7 @@ async fn transform_job(job: LavaJob, lava: &Lava) -> Job {
     }
 }
 
-impl<'a> Stream for Jobs<'a> {
+impl Stream for Jobs<'_> {
     type Item = Result<Job, PaginationError>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
@@ -585,7 +585,6 @@ mod tests {
     };
     use persian_rug::{Accessor, Context, Proxy};
     use std::collections::{BTreeMap, BTreeSet};
-    use std::convert::{Infallible, TryFrom, TryInto};
     use std::str::FromStr;
     use test_log::test;
 
@@ -630,8 +629,8 @@ mod tests {
                 submit_time: job.submit_time.unwrap(),
                 start_time: job.start_time,
                 end_time: job.end_time,
-                state: job.state.try_into().unwrap(),
-                health: job.health.try_into().unwrap(),
+                state: job.state.into(),
+                health: job.health.into(),
                 priority: job.priority,
                 definition: job.definition.clone(),
                 original_definition: job.original_definition.clone(),
@@ -646,32 +645,30 @@ mod tests {
         }
     }
 
-    impl TryFrom<MockJobState> for State {
-        type Error = Infallible;
-        fn try_from(state: MockJobState) -> Result<State, Self::Error> {
+    impl From<MockJobState> for State {
+        fn from(state: MockJobState) -> State {
             use State::*;
 
             match state {
-                MockJobState::Submitted => Ok(Submitted),
-                MockJobState::Scheduling => Ok(Scheduling),
-                MockJobState::Scheduled => Ok(Scheduled),
-                MockJobState::Running => Ok(Running),
-                MockJobState::Canceling => Ok(Canceling),
-                MockJobState::Finished => Ok(Finished),
+                MockJobState::Submitted => Submitted,
+                MockJobState::Scheduling => Scheduling,
+                MockJobState::Scheduled => Scheduled,
+                MockJobState::Running => Running,
+                MockJobState::Canceling => Canceling,
+                MockJobState::Finished => Finished,
             }
         }
     }
 
-    impl TryFrom<MockJobHealth> for Health {
-        type Error = Infallible;
-        fn try_from(health: MockJobHealth) -> Result<Health, Self::Error> {
+    impl From<MockJobHealth> for Health {
+        fn from(health: MockJobHealth) -> Health {
             use Health::*;
 
             match health {
-                MockJobHealth::Unknown => Ok(Unknown),
-                MockJobHealth::Complete => Ok(Complete),
-                MockJobHealth::Incomplete => Ok(Incomplete),
-                MockJobHealth::Canceled => Ok(Canceled),
+                MockJobHealth::Unknown => Unknown,
+                MockJobHealth::Complete => Complete,
+                MockJobHealth::Incomplete => Incomplete,
+                MockJobHealth::Canceled => Canceled,
             }
         }
     }
@@ -809,7 +806,7 @@ mod tests {
             .unwrap()
             .with_timezone(&Utc);
 
-        let mut gen = Proxy::<lava_api_mock::Job<lava_api_mock::State>>::generator()
+        let mut item_gen = Proxy::<lava_api_mock::Job<lava_api_mock::State>>::generator()
             .tags(SubsetsFromPersianRug::new())
             .health(Repeat!(
                 MockJobHealth::Complete,
@@ -832,7 +829,7 @@ mod tests {
             .start_time(GSome(Time::new(base_date, Duration::minutes(-1))))
             .end_time(GSome(Time::new(base_date, Duration::seconds(-30))));
 
-        let _ = GeneratorWithPersianRugMutIterator::new(&mut gen, server.state_mut())
+        let _ = GeneratorWithPersianRugMutIterator::new(&mut item_gen, server.state_mut())
             .take(50)
             .collect::<Vec<_>>();
 
@@ -993,7 +990,7 @@ mod tests {
             lava.job_results_as_junit(job.id)
                 .await
                 .expect("failed to obtain junit output")
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                .map_err(std::io::Error::other)
                 .into_async_read()
                 .read_to_end(&mut v)
                 .await

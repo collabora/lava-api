@@ -56,7 +56,7 @@ use bytes::Bytes;
 use futures::stream::{Stream, TryStreamExt};
 use joblog::JobLogBuilder;
 use log::debug;
-use reqwest::{header, redirect::Policy, Client};
+use reqwest::{Client, header, redirect::Policy};
 use std::collections::HashMap;
 use std::convert::TryInto;
 use tokio::sync::RwLock;
@@ -170,11 +170,11 @@ impl Lava {
 
     /// Obtain a [`Stream`](futures::stream::Stream) of all the
     /// [`Device`](device::Device) instances on the server.
-    pub fn devices(&self) -> Devices {
+    pub fn devices(&self) -> Devices<'_> {
         Devices::new(self)
     }
 
-    pub fn log(&self, id: i64) -> JobLogBuilder {
+    pub fn log(&self, id: i64) -> JobLogBuilder<'_> {
         JobLogBuilder::new(self, id)
     }
 
@@ -185,7 +185,7 @@ impl Lava {
     /// subset of jobs that will be returned, and then after that is
     /// complete to obtain a stream of matching jobs. The default
     /// query is the same as that for [`JobsBuilder::new`].
-    pub fn jobs(&self) -> JobsBuilder {
+    pub fn jobs(&self) -> JobsBuilder<'_> {
         JobsBuilder::new(self)
     }
 

@@ -3,10 +3,10 @@ use strum::{Display, EnumString};
 
 use boulder::{BuildableWithPersianRug, GeneratableWithPersianRug};
 use boulder::{Inc, Pattern};
-use django_query::filtering::{ops::Scalar, FilterableWithPersianRug};
+use django_query::filtering::{FilterableWithPersianRug, ops::Scalar};
 use django_query::{row::IntoRowWithPersianRug, sorting::SortableWithPersianRug};
 
-use persian_rug::{contextual, Context};
+use persian_rug::{Context, contextual};
 
 /// A worker in the LAVA API
 #[derive(
@@ -209,7 +209,7 @@ mod test {
         {
             let m = p.mutate();
 
-            let gen = Proxy::<Worker<crate::state::State>>::generator()
+            let item_gen = Proxy::<Worker<crate::state::State>>::generator()
                 .state(Repeat!(State::Online, State::Offline))
                 .health(Repeat!(Health::Active, Health::Retired))
                 .last_ping(GSome(Time::new(
@@ -221,7 +221,7 @@ mod test {
                 .job_limit(|| 0)
                 .master_version_notified(|| None);
 
-            let _ = GeneratorWithPersianRugIterator::new(gen, m)
+            let _ = GeneratorWithPersianRugIterator::new(item_gen, m)
                 .take(5)
                 .collect::<Vec<_>>();
         }

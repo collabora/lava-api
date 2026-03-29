@@ -5,7 +5,7 @@ use django_query::{
     filtering::FilterableWithPersianRug, row::IntoRowWithPersianRug,
     sorting::SortableWithPersianRug,
 };
-use persian_rug::{contextual, Context, Proxy};
+use persian_rug::{Context, Proxy, contextual};
 use strum::{Display, EnumString};
 
 use crate::devices::Device;
@@ -161,7 +161,7 @@ mod tests {
     use boulder::{
         BuildableWithPersianRug, BuilderWithPersianRug, GeneratorWithPersianRugIterator,
     };
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use test_log::test;
 
     async fn make_request<T, U>(server_uri: T, endpoint: U) -> Result<Value>
@@ -329,7 +329,7 @@ mod tests {
         {
             let m = p.mutate();
 
-            let gen = Proxy::<Job<crate::state::State>>::generator()
+            let item_gen = Proxy::<Job<crate::state::State>>::generator()
                 .state(|| State::Finished)
                 .health(|| Health::Complete)
                 .submit_time(GSome(Time::new(
@@ -356,7 +356,7 @@ mod tests {
                 .health_check(Repeat!(false, true))
                 .priority(Repeat!(0, 50));
 
-            let _ = GeneratorWithPersianRugIterator::new(gen, m)
+            let _ = GeneratorWithPersianRugIterator::new(item_gen, m)
                 .take(4)
                 .collect::<Vec<_>>();
         }

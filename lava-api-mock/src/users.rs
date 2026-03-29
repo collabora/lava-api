@@ -4,7 +4,7 @@ use django_query::{
     filtering::FilterableWithPersianRug, row::IntoRowWithPersianRug,
     sorting::SortableWithPersianRug,
 };
-use persian_rug::{contextual, Context, Proxy};
+use persian_rug::{Context, Proxy, contextual};
 
 /// A user in the LAVA API
 // FIXME: Deriving sort and IntoRowWithPersianRug needlessly
