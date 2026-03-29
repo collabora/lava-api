@@ -31,7 +31,7 @@ fn create_junit(job_id: i64, data: &SharedState) -> Report {
         if job.id == job_id {
             let (ty, msg) = match testcase.metadata.as_ref() {
                 Some(meta) => {
-                    let m: crate::Metadata = serde_yaml::from_str(meta).unwrap();
+                    let m: crate::Metadata = serde_norway::from_str(meta).unwrap();
                     (
                         m.error_type.unwrap_or_default(),
                         m.error_msg.unwrap_or_default(),
@@ -124,7 +124,7 @@ mod tests {
                 .unit(Repeat!("", "seconds"))
                 .result(|| PassFail::Pass)
                 .measurement(Repeat!(None, Some(Decimal(dec!(0.1000000000)))))
-            // We hard code this here because serde_yaml isn't configurable enough to match the surface form
+            // We hard code this here because serde_norway isn't configurable enough to match the surface form
             // We check the metadata generator separately
                 .metadata(GSome(Repeat!(
                     "case: example-case-0\ndefinition: example-definition-0\nresult: pass\n",

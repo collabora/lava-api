@@ -124,14 +124,14 @@ where
         where
             E: serde::de::Error,
         {
-            serde_yaml::from_str(value).map_err(|e| serde::de::Error::custom(e))
+            serde_norway::from_str(value).map_err(|e| serde::de::Error::custom(e))
         }
 
         fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
         where
             E: serde::de::Error,
         {
-            serde_yaml::from_str(&value).map_err(|e| serde::de::Error::custom(e))
+            serde_norway::from_str(&value).map_err(|e| serde::de::Error::custom(e))
         }
     }
 
@@ -160,7 +160,7 @@ extra: /var/lib/lava-server/default/media/job-output/2022/02/28/5790643/metadata
 level: 1.2.1
 namespace: common
 result: pass"#;
-        let meta: Metadata = serde_yaml::from_str(yaml).expect("failed to deserialize metadata");
+        let meta: Metadata = serde_norway::from_str(yaml).expect("failed to deserialize metadata");
         assert_eq!(meta.case, "http-download");
         assert_eq!(meta.definition, "lava");
         assert_eq!(meta.duration, Some("0.35".to_string()));
@@ -178,7 +178,7 @@ error_msg: bootloader-interrupt timed out after 30 seconds
 error_type: Infrastructure
 result: fail
 "#;
-        let meta: Metadata = serde_yaml::from_str(yaml).expect("failed to deserialize metadata");
+        let meta: Metadata = serde_norway::from_str(yaml).expect("failed to deserialize metadata");
         assert_eq!(meta.case, "job");
         assert_eq!(meta.definition, "lava");
         assert_eq!(meta.duration, None);
