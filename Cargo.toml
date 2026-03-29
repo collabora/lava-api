@@ -4,3 +4,6 @@ members = [
   "lava-api",
   "lava-api-mock"
 ]
+
+[workspace.dependencies]
+serde_norway = "0.9"

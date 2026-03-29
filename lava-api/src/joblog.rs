@@ -57,7 +57,7 @@ pub enum JobLogError {
     #[error("Request failed: {0}")]
     RequestError(#[from] reqwest::Error),
     #[error("Parse error: {0} - {1}")]
-    ParseError(String, serde_yaml::Error),
+    ParseError(String, serde_norway::Error),
     #[error("No data available")]
     NoData,
 }
@@ -193,7 +193,7 @@ pub struct JobResult {
     #[serde(default, deserialize_with = "deserialize_duration")]
     pub duration: Option<Duration>,
     #[serde(default)]
-    pub extra: HashMap<String, serde_yaml::Value>,
+    pub extra: HashMap<String, serde_norway::Value>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -281,7 +281,7 @@ impl Stream for JobLog<'_> {
                         buf.into()
                     };
                     let l = line.slice(1..);
-                    let entry = serde_yaml::from_slice(l.as_ref()).map_err(|e| {
+                    let entry = serde_norway::from_slice(l.as_ref()).map_err(|e| {
                         let s = String::from_utf8_lossy(l.as_ref());
                         JobLogError::ParseError(s.into_owned(), e)
                     });

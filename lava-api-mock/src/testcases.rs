@@ -258,7 +258,7 @@ pub struct TestCase<C: Context + 'static> {
     #[django(sort, op(lt, lte, gt, gte))]
     pub measurement: Option<Decimal>,
     // Has to be a string because of the filtering and sorting
-    #[boulder(default=Some(serde_yaml::to_string(&Metadata::builder().build()).unwrap()),
+    #[boulder(default=Some(serde_norway::to_string(&Metadata::builder().build()).unwrap()),
               generator=GSome(MetadataGenerator::new()))]
     #[django(sort, op(in, contains, icontains, startswith, endswith))]
     pub metadata: Option<String>,
@@ -369,7 +369,7 @@ impl MetadataGenerator {
 impl Generator for MetadataGenerator {
     type Output = String;
     fn generate(&mut self) -> Self::Output {
-        serde_yaml::to_string(&self.0.generate()).unwrap()
+        serde_norway::to_string(&self.0.generate()).unwrap()
     }
 }
 
@@ -457,10 +457,10 @@ mod tests {
         ];
 
         for case in cases {
-            let control: serde_yaml::Value =
-                serde_yaml::from_str(case).expect("failed to parse control input");
-            let test: serde_yaml::Value =
-                serde_yaml::from_str(&mgen.generate()).expect("failed to generate test data");
+            let control: serde_norway::Value =
+                serde_norway::from_str(case).expect("failed to parse control input");
+            let test: serde_norway::Value =
+                serde_norway::from_str(&mgen.generate()).expect("failed to generate test data");
             assert_eq!(test, control);
         }
     }
@@ -476,7 +476,7 @@ mod tests {
                 .unit(Repeat!("", "seconds"))
                 .result(|| PassFail::Pass)
                 .measurement(Repeat!(None, Some(Decimal(dec!(0.1000000000)))))
-            // We hard code this here because serde_yaml isn't configurable enough to match the surface form
+            // We hard code this here because serde_norway isn't configurable enough to match the surface form
             // We check the metadata generator separately
                 .metadata(GSome(Repeat!(
                     "case: example-case-0\ndefinition: example-definition-0\nresult: pass\n",
