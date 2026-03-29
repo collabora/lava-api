@@ -6,7 +6,7 @@ use django_query::{
     filtering::FilterableWithPersianRug, row::IntoRowWithPersianRug,
     sorting::SortableWithPersianRug,
 };
-use persian_rug::{contextual, Context, Proxy};
+use persian_rug::{Context, Proxy, contextual};
 
 /// An alias from the LAVA API
 #[derive(
@@ -220,7 +220,7 @@ mod test {
         {
             let m = p.mutate();
 
-            let gen = Proxy::<DeviceType<State>>::generator()
+            let item_gen = Proxy::<DeviceType<State>>::generator()
                 .architecture(|| None)
                 .processor(|| None)
                 .cpu_model(Repeat::new([None, Some("".to_string())]))
@@ -231,7 +231,7 @@ mod test {
                 .description(Repeat::new([None, Some("".to_string())]))
                 .health_frequency(|| 10);
 
-            let _ = GeneratorWithPersianRugIterator::new(gen, m)
+            let _ = GeneratorWithPersianRugIterator::new(item_gen, m)
                 .take(5)
                 .collect::<Vec<_>>();
         }

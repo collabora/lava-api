@@ -120,13 +120,14 @@ impl SharedState {
     ///     .await;
     /// # });
     /// ```
+    #[allow(clippy::type_complexity)]
     pub fn endpoint<T>(
         &self,
         uri: Option<&str>,
         default_limit: Option<usize>,
     ) -> EndpointWithContext<
         CloneReplacePersianRugTableSource<
-            impl Fn(&Arc<State>) -> persian_rug::TableIterator<'_, T> + Clone,
+            impl Fn(&Arc<State>) -> persian_rug::TableIterator<'_, T> + Clone + use<T>,
             State,
         >,
     >
@@ -185,13 +186,14 @@ impl SharedState {
     ///     .await;
     /// # });
     /// ```
+    #[allow(clippy::type_complexity)]
     pub fn nested_endpoint<T>(
         &self,
         params: NestedEndpointParams<'_>,
         default_limit: Option<usize>,
     ) -> NestedEndpointWithContext<
         CloneReplacePersianRugTableSource<
-            impl Fn(&Arc<State>) -> persian_rug::TableIterator<'_, T> + Clone,
+            impl Fn(&Arc<State>) -> persian_rug::TableIterator<'_, T> + Clone + use<T>,
             State,
         >,
     >
@@ -288,7 +290,7 @@ impl Default for SharedState {
 /// - 5 [`TestCase`] instances
 /// - 2 [`TestSet`] instances
 /// - 3 [`TestSuite`] instances
-/// to be created for each job that is created.
+///   to be created for each job that is created.
 #[derive(Buildable, Clone, Debug, Eq, PartialEq)]
 pub struct PopulationParams {
     #[boulder(default = 10usize)]
@@ -454,8 +456,8 @@ impl State {
     /// draws [`Alias`], [`Architecture`], [`BitWidth`], [`Core`] and
     /// [`ProcessorFamily`] instances from those already in the
     /// containing [`State`] at the point of generation.
-    pub fn make_device_type_generator(
-    ) -> impl GeneratorWithPersianRug<State, Output = Proxy<DeviceType<State>>> {
+    pub fn make_device_type_generator()
+    -> impl GeneratorWithPersianRug<State, Output = Proxy<DeviceType<State>>> {
         Proxy::<DeviceType<State>>::generator()
             .aliases(SubsetsFromPersianRug::new())
             .architecture(TryRepeatFromPersianRug::new())
@@ -482,8 +484,8 @@ impl State {
     /// draws [`DeviceType`], [`User`], [`Group`],
     /// [`Tag`] and [`Worker`] instances from those already in
     /// the containing [`State`] at the point of generation.
-    pub fn make_device_generator(
-    ) -> impl GeneratorWithPersianRug<State, Output = Proxy<Device<State>>> {
+    pub fn make_device_generator()
+    -> impl GeneratorWithPersianRug<State, Output = Proxy<Device<State>>> {
         Proxy::<Device<State>>::generator()
             .device_type(RepeatFromPersianRug::new())
             .physical_owner(TryRepeatFromPersianRug::new())
@@ -628,7 +630,7 @@ mod tests {
     use anyhow::Result;
     use boulder::{BuildableWithPersianRug, BuilderWithPersianRug};
     use persian_rug::Proxy;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
 
     async fn make_request<T, U>(server_uri: T, endpoint: U) -> Result<Value>
     where

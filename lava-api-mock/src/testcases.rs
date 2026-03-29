@@ -22,7 +22,7 @@ use crate::tags::Tag;
 use crate::users::{Group, User};
 use crate::workers::Worker;
 
-use persian_rug::{contextual, Context, Proxy};
+use persian_rug::{Context, Proxy, contextual};
 
 /// A representation of the metadata for a test case.
 #[derive(Clone, Debug, Deserialize, Serialize, Buildable, Generatable)]
@@ -413,9 +413,9 @@ mod tests {
     #[test]
     fn test_generator() {
         let mut p = SharedState::new();
-        let gen = TestCase::<State>::generator();
+        let item_gen = TestCase::<State>::generator();
 
-        let tcs = GeneratorWithPersianRugIterator::new(gen, p.mutate())
+        let tcs = GeneratorWithPersianRugIterator::new(item_gen, p.mutate())
             .take(5)
             .collect::<Vec<_>>();
 
@@ -471,7 +471,7 @@ mod tests {
         {
             let m = p.mutate();
 
-            let gen = Proxy::<TestCase<State>>::generator()
+            let item_gen = Proxy::<TestCase<State>>::generator()
                 .name(Pattern!("example-case-{}", Inc(0)))
                 .unit(Repeat!("", "seconds"))
                 .result(|| PassFail::Pass)
@@ -492,7 +492,7 @@ mod tests {
                 .test_set(|| None)
                 .resource_uri(Pattern!("example-resource-uri-{}", Inc(0)));
 
-            let _ = GeneratorWithPersianRugIterator::new(gen, m)
+            let _ = GeneratorWithPersianRugIterator::new(item_gen, m)
                 .take(4)
                 .collect::<Vec<_>>();
         }

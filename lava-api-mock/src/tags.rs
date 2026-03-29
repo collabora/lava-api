@@ -5,7 +5,7 @@ use django_query::{
     sorting::SortableWithPersianRug,
 };
 
-use persian_rug::{contextual, Context};
+use persian_rug::{Context, contextual};
 
 /// A tag in the LAVA API
 #[derive(
@@ -48,11 +48,11 @@ mod tests {
         {
             let m = p.mutate();
 
-            let gen = Proxy::<Tag<State>>::generator()
+            let item_gen = Proxy::<Tag<State>>::generator()
                 .id(Inc(1))
                 .description(|| None);
 
-            let _ = GeneratorWithPersianRugIterator::new(gen, m)
+            let _ = GeneratorWithPersianRugIterator::new(item_gen, m)
                 .take(4)
                 .collect::<Vec<_>>();
         }

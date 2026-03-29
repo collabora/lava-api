@@ -110,7 +110,7 @@ where
         }
     }
 
-    impl<'de, U> Visitor<'de> for StrVisitor<U>
+    impl<U> Visitor<'_> for StrVisitor<U>
     where
         U: for<'de2> Deserialize<'de2>,
     {

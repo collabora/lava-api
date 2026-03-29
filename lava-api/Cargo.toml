@@ -2,7 +2,8 @@
 name = "lava-api"
 version = "0.1.2"
 authors = ["Sjoerd Simons <sjoerd@collabora.com>"]
-edition = "2021"
+edition = "2024"
+rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 description = "Helper crate to work with the LAVA REST APIs"
 homepage = "https://github.com/collabora/lava-api"
@@ -12,24 +13,24 @@ readme = "../README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chrono = { version = "0.4.20", features = ["serde"] }
+chrono = { version = "0.4.44", features = ["serde"] }
 futures = "0.3"
-serde = { version = "1.0.157", features = ["derive"] }
-serde_json = "1.0.51"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
 serde_with = "3"
 serde_yaml = "0.9"
-reqwest = { version = "0.11", features = ["json", "stream"] }
-tokio = { version = "1.35", features = ["macros", "rt", "rt-multi-thread", "sync"] }
-url = "2.2"
-thiserror = "1.0.56"
-log = "0.4.8"
-strum = { version = "0.25", features = ["derive"] }
-bytes = "1.2.1"
+reqwest = { version = "0.13", features = ["json", "stream"] }
+tokio = { version = "1.50", features = ["macros", "rt", "rt-multi-thread", "sync"] }
+url = "2.5"
+thiserror = "2.0.18"
+log = "0.4.29"
+strum = { version = "0.28", features = ["derive"] }
+bytes = "1.11.1"
 
 [dev-dependencies]
-anyhow = "1.0.26"
+anyhow = "1.0.102"
 structopt = "0.3"
-env_logger = "0.10"
+env_logger = "0.11"
 lava-api-mock = { path = "../lava-api-mock", version = "0.1.2" }
 wiremock = "0.5.22"
 django-query = "0.2"

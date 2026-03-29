@@ -244,7 +244,7 @@ impl<'a> JobLog<'a> {
     }
 }
 
-impl<'a> Stream for JobLog<'a> {
+impl Stream for JobLog<'_> {
     type Item = Result<JobLogEntry, JobLogError>;
 
     fn poll_next(

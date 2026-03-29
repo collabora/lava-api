@@ -81,7 +81,7 @@ pub use devices::{Device, Health as DeviceHealth, State as DeviceState};
 pub use devicetypes::{Alias, Architecture, BitWidth, Core, DeviceType, ProcessorFamily};
 pub use jobs::Job;
 pub use jobs::{Health as JobHealth, State as JobState};
-pub use junit::{junit_endpoint, JunitEndpoint};
+pub use junit::{JunitEndpoint, junit_endpoint};
 pub use lava_mock::{LavaMock, PaginationLimits};
 pub use state::{PopulationParams, SharedState, State};
 pub use tags::Tag;
