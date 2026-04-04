@@ -28,7 +28,7 @@ strum = { version = "0.28", features = [ "derive" ] }
 url = "2.5"
 thiserror = "2.0.18"
 log = "0.4.29"
-wiremock = { version = "0.5.22" }
+wiremock = { version = "0.6.5" }
 rand = { version = "0.10" }
 arc-swap = "1.9"
 rand_chacha = "0.10"
