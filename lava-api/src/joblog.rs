@@ -5,7 +5,7 @@ use std::task::Poll;
 use std::time::Duration;
 
 use bytes::{Bytes, BytesMut};
-use chrono::NaiveDateTime;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use futures::future::BoxFuture;
 use futures::stream::BoxStream;
 use futures::{prelude::*, ready};
@@ -218,8 +218,25 @@ pub enum JobLogLevel {
     Exception,
 }
 
+fn job_deserialize_dt<'de, D>(d: D) -> Result<NaiveDateTime, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum DorN {
+        D(DateTime<Utc>),
+        N(NaiveDateTime),
+    }
+    match DorN::deserialize(d)? {
+        DorN::D(d) => Ok(d.naive_utc()),
+        DorN::N(n) => Ok(n),
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct JobLogEntry {
+    #[serde(deserialize_with = "job_deserialize_dt")]
     pub dt: NaiveDateTime,
     pub lvl: JobLogLevel,
     pub ns: Option<String>,
@@ -300,5 +317,23 @@ impl Stream for JobLog<'_> {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn job_log_entry_deserialisation() {
+        let entry0: JobLogEntry = serde_json::from_str(
+            r#"{"dt": "2026-06-02T12:16:27.730458", "lvl": "results", "msg": {"definition": "lava", "case": "job", "result": "pass"}}"#,
+        )
+        .unwrap();
+        let entry1: JobLogEntry = serde_json::from_str(
+            r#"{"dt": "2026-06-02T12:16:27.730458+00:00", "lvl": "results", "msg": {"definition": "lava", "case": "job", "result": "pass"}}"#,
+        )
+        .unwrap();
+        assert_eq!(entry0.dt, entry1.dt);
     }
 }
