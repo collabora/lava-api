@@ -196,12 +196,43 @@ pub struct JobResult {
     pub extra: HashMap<String, serde_norway::Value>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone)]
 pub enum JobLogMsg {
     Msg(String),
     Msgs(Vec<String>),
     Result(JobResult),
+}
+
+impl<'de> Deserialize<'de> for JobLogMsg {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Deserialize as serde_norway::Value first to avoid serde's ContentVisitor,
+        // which does not support YAML tagged values (e.g. `! "188250"`) that LAVA
+        // sometimes emits in the `extra` field.
+        let value = serde_norway::Value::deserialize(deserializer)?;
+        match value {
+            serde_norway::Value::String(s) => Ok(JobLogMsg::Msg(s)),
+            serde_norway::Value::Sequence(seq) => {
+                let msgs = seq
+                    .into_iter()
+                    .map(|v| match v {
+                        serde_norway::Value::String(s) => Ok(s),
+                        _ => Err(serde::de::Error::custom("expected string in msg sequence")),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(JobLogMsg::Msgs(msgs))
+            }
+            serde_norway::Value::Mapping(_) => {
+                let result = serde_norway::from_value(value).map_err(serde::de::Error::custom)?;
+                Ok(JobLogMsg::Result(result))
+            }
+            _ => Err(serde::de::Error::custom(
+                "expected string, sequence, or mapping for msg",
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -335,5 +366,40 @@ mod tests {
         )
         .unwrap();
         assert_eq!(entry0.dt, entry1.dt);
+    }
+
+    #[test]
+    fn test_joblog_entry_with_tagged_extra() {
+        // Regression test for https://github.com/collabora/lava-api/issues/31
+        // LAVA sometimes emits tagged YAML values (e.g. `! "188250"`) in the
+        // `extra` field of a results entry. The bare `!` is a YAML non-specific
+        // tag and should not prevent deserialization.
+        let yaml = r#"{"dt": "2026-04-30T16:19:53.641343", "lvl": "results", "msg": {"definition": "lava", "namespace": "common", "case": "http-download", "level": "1.4.1", "duration": "0.00", "result": "pass", "extra": {"label": "dtb", "size": ! "188250", "sha256sum": "9f4c38d2218c38be09a03812ab9176d521b8fb624b8e9ecff69b4125d260122b"}}}"#;
+        let entry: JobLogEntry =
+            serde_norway::from_str(yaml).expect("failed to parse entry with tagged extra value");
+        assert!(matches!(entry.lvl, JobLogLevel::Results));
+        let JobLogMsg::Result(result) = entry.msg else {
+            panic!("expected Result variant, got {:?}", entry.msg);
+        };
+        assert_eq!(result.case, "http-download");
+        assert_eq!(result.definition, "lava");
+        assert_eq!(result.result, "pass");
+        assert!(result.extra.contains_key("size"));
+        assert!(result.extra.contains_key("sha256sum"));
+    }
+
+    #[test]
+    fn test_joblog_msg_string() {
+        let yaml = r#"{"dt": "2022-01-01T00:00:00", "lvl": "info", "msg": "hello world"}"#;
+        let entry: JobLogEntry = serde_norway::from_str(yaml).expect("failed to parse string msg");
+        assert!(matches!(entry.msg, JobLogMsg::Msg(ref s) if s == "hello world"));
+    }
+
+    #[test]
+    fn test_joblog_msg_sequence() {
+        let yaml = r#"{"dt": "2022-01-01T00:00:00", "lvl": "target", "msg": ["line1", "line2"]}"#;
+        let entry: JobLogEntry =
+            serde_norway::from_str(yaml).expect("failed to parse sequence msg");
+        assert!(matches!(entry.msg, JobLogMsg::Msgs(ref v) if v == &["line1", "line2"]));
     }
 }
