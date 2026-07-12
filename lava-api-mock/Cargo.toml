@@ -39,7 +39,7 @@ regex = "1.12.3"
 anyhow = "1.0.102"
 env_logger = "0.11"
 test-log = "0.2"
-reqwest = "0.13"
+reqwest = { version = "0.13", features = [ "json" ] }
 tokio-test = "0.4"
 lava-api = { path = "../lava-api" }
 junit-parser = "1"
