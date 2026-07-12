@@ -40,7 +40,13 @@
 //! whatever update pattern is desired.
 //!
 //! Example:
-//! ```rust
+//!
+//! Note: this example is marked `ignore` because it depends on the
+//! [`lava-api`](https://docs.rs/lava-api) client crate, which in turn
+//! depends on this crate; compiling it as a doctest would introduce a
+//! dependency cycle that breaks standalone builds of this crate.
+//!
+//! ```ignore
 //! use futures::stream::TryStreamExt;
 //! use lava_api_mock::{LavaMock, PaginationLimits, PopulationParams, SharedState};
 //! use lava_api::Lava;
