@@ -114,6 +114,11 @@ impl Lava {
         // Force redirect policy none as that will drop sensitive headers; in
         // particular tokens
         let client = Client::builder()
+            .user_agent(concat!(
+                env!("CARGO_PKG_NAME"),
+                "/",
+                env!("CARGO_PKG_VERSION")
+            ))
             .redirect(Policy::none())
             .default_headers(headers)
             .build()?;
